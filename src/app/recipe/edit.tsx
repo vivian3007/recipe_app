@@ -25,6 +25,7 @@ import { TagInput } from '@/components/TagInput';
 import { Button, Field, Loading, Stepper } from '@/components/ui';
 import { getRecipe, listRecipes, pickAndUploadImage, saveRecipe } from '@/lib/api';
 import { confirm, notify } from '@/lib/dialogs';
+import { recipeFromPhotos } from '@/lib/recipeFromPhoto';
 import { BlockedError, importRecipe, normalizeUrl, type ImportedRecipe } from '@/lib/recipeImport';
 import { useSession } from '@/lib/session';
 import { tagsByUse } from '@/lib/tags';
@@ -50,6 +51,7 @@ export default function EditRecipe() {
   const [otherAuthor, setOtherAuthor] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  const [readingPhoto, setReadingPhoto] = useState(false);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Snapshot of everything that gets saved, to tell whether something changed since opening.
@@ -120,7 +122,7 @@ export default function EditRecipe() {
     if (r.tags.length) setTags((prev) => [...new Set([...prev, ...r.tags])]);
     if (r.instructions) setInstructions(r.instructions);
     if (r.ingredients.length) setIngredients(rowsFromIngredients(r.ingredients));
-    setSourceUrl(r.url);
+    if (r.url) setSourceUrl(r.url);
 
     if (r.ingredients.length) {
       const steps = r.instructions ? r.instructions.split('\n').length : 0;
@@ -171,6 +173,29 @@ export default function EditRecipe() {
     }
   }
 
+  /** Has AI read the recipe from one or more photos or screenshots. */
+  async function fillFromPhotos() {
+    setImportMessage(null);
+    setReadingPhoto(true);
+    try {
+      const result = await recipeFromPhotos(knownTags);
+      if (!result) return;
+      const hasContent = !!title.trim() || rowsToIngredients(ingredients).length > 0;
+      const replace =
+        !hasContent ||
+        (await confirm(
+          'Gegevens overnemen?',
+          'Wat je al hebt ingevuld wordt vervangen door het recept van de foto.',
+          'Overnemen',
+        ));
+      if (replace) applyImport(result);
+    } catch (e) {
+      setImportMessage({ ok: false, text: `${(e as Error).message} Je kunt het recept ook zelf invullen.` });
+    } finally {
+      setReadingPhoto(false);
+    }
+  }
+
   async function save() {
     if (!household || !profile) return;
     const link = sourceUrl.trim() ? normalizeUrl(sourceUrl) : null;
@@ -218,7 +243,7 @@ export default function EditRecipe() {
           </View>
         )}
         <View style={styles.linkBox}>
-          <Text style={styles.label}>Recept van een website?</Text>
+          <Text style={styles.label}>Recept van een website of foto?</Text>
           <Text style={styles.linkHint}>Plak de link, dan probeert de app het recept over te nemen.</Text>
           <View style={styles.linkRow}>
             <TextInput
@@ -247,6 +272,20 @@ export default function EditRecipe() {
               <Text style={styles.fetchText}>Ophalen</Text>
             </Pressable>
           </View>
+          <Pressable
+            onPress={fillFromPhotos}
+            disabled={readingPhoto || importing}
+            style={({ pressed }) => [styles.photoButton, (readingPhoto || importing || pressed) && { opacity: 0.6 }]}
+          >
+            {readingPhoto ? (
+              <ActivityIndicator color={colors.accent} size="small" />
+            ) : (
+              <Ionicons name="image-outline" size={18} color={colors.accent} />
+            )}
+            <Text style={styles.photoText}>
+              {readingPhoto ? 'Recept lezen… (dit duurt even)' : 'Uit foto of screenshot halen'}
+            </Text>
+          </Pressable>
           {importMessage && (
             <Text style={[styles.importMessage, { color: importMessage.ok ? colors.accent : colors.primaryDark }]}>
               {importMessage.text}
@@ -312,6 +351,18 @@ const styles = StyleSheet.create({
     gap: spacing(2),
   },
   linkHint: { fontSize: 13, color: colors.textMuted },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(2),
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(3),
+  },
+  photoText: { fontSize: 15, fontWeight: '600', color: colors.accent },
   linkRow: { flexDirection: 'row', gap: spacing(2) },
   linkInput: {
     flex: 1,
