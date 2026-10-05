@@ -26,6 +26,7 @@ import { Button, Field, Loading, Stepper } from '@/components/ui';
 import { getRecipe, listRecipes, pickAndUploadImage, saveRecipe } from '@/lib/api';
 import { confirm, notify } from '@/lib/dialogs';
 import { BlockedError, importRecipe, normalizeUrl, type ImportedRecipe } from '@/lib/recipeImport';
+import { parseRecipeText } from '@/lib/recipeText';
 import { useSession } from '@/lib/session';
 import { tagsByUse } from '@/lib/tags';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -50,6 +51,8 @@ export default function EditRecipe() {
   const [otherAuthor, setOtherAuthor] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pastedText, setPastedText] = useState('');
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Snapshot of everything that gets saved, to tell whether something changed since opening.
@@ -120,7 +123,7 @@ export default function EditRecipe() {
     if (r.tags.length) setTags((prev) => [...new Set([...prev, ...r.tags])]);
     if (r.instructions) setInstructions(r.instructions);
     if (r.ingredients.length) setIngredients(rowsFromIngredients(r.ingredients));
-    setSourceUrl(r.url);
+    if (r.url) setSourceUrl(r.url);
 
     if (r.ingredients.length) {
       const steps = r.instructions ? r.instructions.split('\n').length : 0;
@@ -171,6 +174,30 @@ export default function EditRecipe() {
     }
   }
 
+  /** Fills in the recipe from pasted text, e.g. copied from a screenshot. */
+  async function fillFromText() {
+    const result = parseRecipeText(pastedText);
+    if (!result.ingredients.length && !result.instructions) {
+      setImportMessage({
+        ok: false,
+        text: 'Ik herken hier geen recept in. Staan de ingrediënten en de bereiding er allebei in? Je kunt het recept ook zelf invullen.',
+      });
+      return;
+    }
+    const hasContent = !!title.trim() || rowsToIngredients(ingredients).length > 0;
+    const replace =
+      !hasContent ||
+      (await confirm(
+        'Gegevens overnemen?',
+        'Wat je al hebt ingevuld wordt vervangen door het geplakte recept.',
+        'Overnemen',
+      ));
+    if (!replace) return;
+    applyImport(result);
+    setPasteOpen(false);
+    setPastedText('');
+  }
+
   async function save() {
     if (!household || !profile) return;
     const link = sourceUrl.trim() ? normalizeUrl(sourceUrl) : null;
@@ -218,7 +245,7 @@ export default function EditRecipe() {
           </View>
         )}
         <View style={styles.linkBox}>
-          <Text style={styles.label}>Recept van een website?</Text>
+          <Text style={styles.label}>Recept van een website of screenshot?</Text>
           <Text style={styles.linkHint}>Plak de link, dan probeert de app het recept over te nemen.</Text>
           <View style={styles.linkRow}>
             <TextInput
@@ -247,6 +274,48 @@ export default function EditRecipe() {
               <Text style={styles.fetchText}>Ophalen</Text>
             </Pressable>
           </View>
+          {pasteOpen ? (
+            <View style={{ gap: spacing(2) }}>
+              <Text style={styles.linkHint}>
+                Kopieer de tekst uit een screenshot. Op de iPhone houd je je vinger op de tekst in de foto en kies je
+                Kopieer; op Android tik je op Tekst selecteren of gebruik je Google Lens. Plak hem hieronder.
+              </Text>
+              <TextInput
+                value={pastedText}
+                onChangeText={(v) => {
+                  setPastedText(v);
+                  setImportMessage(null);
+                }}
+                placeholder={'Ingrediënten voor 2 pers:\n140 gram pasta\n…\n\nBereiding:\n1. Kook de pasta…'}
+                placeholderTextColor={colors.placeholder}
+                multiline
+                style={[styles.linkInput, styles.pasteInput]}
+              />
+              <View style={styles.linkRow}>
+                <Button
+                  title="Annuleren"
+                  variant="ghost"
+                  onPress={() => {
+                    setPasteOpen(false);
+                    setPastedText('');
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <Button title="Invullen" icon="checkmark" onPress={fillFromText} disabled={!pastedText.trim()} style={{ flex: 1 }} />
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => {
+                setPasteOpen(true);
+                setImportMessage(null);
+              }}
+              style={({ pressed }) => [styles.pasteButton, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="clipboard-outline" size={18} color={colors.accent} />
+              <Text style={styles.pasteText}>Recepttekst plakken</Text>
+            </Pressable>
+          )}
           {importMessage && (
             <Text style={[styles.importMessage, { color: importMessage.ok ? colors.accent : colors.primaryDark }]}>
               {importMessage.text}
@@ -312,6 +381,19 @@ const styles = StyleSheet.create({
     gap: spacing(2),
   },
   linkHint: { fontSize: 13, color: colors.textMuted },
+  pasteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing(2),
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(3),
+  },
+  pasteText: { fontSize: 15, fontWeight: '600', color: colors.accent },
+  pasteInput: { minHeight: 160, maxHeight: 320, textAlignVertical: 'top' },
   linkRow: { flexDirection: 'row', gap: spacing(2) },
   linkInput: {
     flex: 1,
