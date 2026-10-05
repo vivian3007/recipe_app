@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Chip, EmptyState, Loading } from '@/components/ui';
 import { replaceTagsEverywhere } from '@/lib/api';
-import { confirm } from '@/lib/confirm';
+import { confirm } from '@/lib/dialogs';
 import {
   clearSelectedTags,
   normalizeTag,

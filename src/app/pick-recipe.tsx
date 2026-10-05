@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { RecipeImage } from '@/components/RecipeCard';
 import { Chip, EmptyState, Loading, Stepper } from '@/components/ui';
 import { addMeal, replaceMeal } from '@/lib/api';
 import { DAY_NAMES, dateOfDay, formatShort } from '@/lib/dates';
+import { notify } from '@/lib/dialogs';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { DEFAULT_SERVINGS } from '@/lib/types';
@@ -43,7 +44,7 @@ export default function PickRecipe() {
       else await addMeal(household.id, weekStart, day, recipeId, servings);
       router.back();
     } catch (e) {
-      Alert.alert('Opslaan mislukt', (e as Error).message);
+      notify('Opslaan mislukt', (e as Error).message);
       setSaving(false);
     }
   }

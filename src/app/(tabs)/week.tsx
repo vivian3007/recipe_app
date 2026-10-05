@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChooserPlanner } from '@/components/ChooserPlanner';
 import { DragHandle } from '@/components/DragHandle';
@@ -10,6 +10,7 @@ import { Loading, Stepper } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { removeMeal, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
 import { DAY_NAMES, dateOfDay, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
+import { confirm, notify } from '@/lib/dialogs';
 import { memberColor, memberLabel } from '@/lib/members';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -210,7 +211,7 @@ export default function Week() {
     try {
       await swapDays(plan.id, a, b);
     } catch (e) {
-      Alert.alert('Verplaatsen mislukt', (e as Error).message);
+      notify('Verplaatsen mislukt', (e as Error).message);
     }
     reload();
   }
@@ -222,7 +223,7 @@ export default function Week() {
     try {
       await setDayChoosers(household.id, weekStart, days, chooserId);
     } catch (e) {
-      Alert.alert('Opslaan mislukt', (e as Error).message);
+      notify('Opslaan mislukt', (e as Error).message);
       reload();
     }
   }
@@ -236,18 +237,15 @@ export default function Week() {
     }
   }
 
-  function confirmRemove(meal: WeekPlanMeal) {
-    Alert.alert('Gerecht weghalen?', `${meal.recipe.title} van ${DAY_NAMES[meal.day].toLowerCase()} halen?`, [
-      { text: 'Annuleren', style: 'cancel' },
-      {
-        text: 'Weghalen',
-        style: 'destructive',
-        onPress: async () => {
-          await removeMeal(meal.id);
-          reload();
-        },
-      },
-    ]);
+  async function confirmRemove(meal: WeekPlanMeal) {
+    const message = `${meal.recipe.title} van ${DAY_NAMES[meal.day].toLowerCase()} halen?`;
+    if (!(await confirm('Gerecht weghalen?', message, 'Weghalen', true))) return;
+    try {
+      await removeMeal(meal.id);
+    } catch (e) {
+      notify('Weghalen mislukt', (e as Error).message);
+    }
+    reload();
   }
 
   /** Choose a dish for the day, or with `replacing`, another dish in its place. */

@@ -2,11 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useCallback, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { RecipeImage } from '@/components/RecipeCard';
 import { Button, Loading, Stepper } from '@/components/ui';
 import { deleteRecipe, getRecipe, getWeekPlan, listFavoriteIds, setFavorite } from '@/lib/api';
+import { confirm, notify } from '@/lib/dialogs';
 import { formatAmount, scaleIngredient } from '@/lib/quantities';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -52,29 +53,22 @@ export default function RecipeDetail() {
     await setFavorite(profile.id, recipe.id, !favorite).catch(() => setFav(favorite));
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!recipe) return;
-    Alert.alert('Recept verwijderen?', `"${recipe.title}" wordt voor het hele gezin verwijderd, ook uit weekplannen.`, [
-      { text: 'Annuleren', style: 'cancel' },
-      {
-        text: 'Verwijderen',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteRecipe(recipe.id);
-            router.back();
-          } catch (e) {
-            Alert.alert('Verwijderen mislukt', (e as Error).message);
-          }
-        },
-      },
-    ]);
+    const message = `"${recipe.title}" wordt voor het hele gezin verwijderd, ook uit weekplannen.`;
+    if (!(await confirm('Recept verwijderen?', message, 'Verwijderen', true))) return;
+    try {
+      await deleteRecipe(recipe.id);
+      router.back();
+    } catch (e) {
+      notify('Verwijderen mislukt', (e as Error).message);
+    }
   }
 
   function openSource() {
     if (!recipe?.source_url) return;
     Linking.openURL(recipe.source_url).catch(() =>
-      Alert.alert('Kan de link niet openen', recipe.source_url ?? ''),
+      notify('Kan de link niet openen', recipe.source_url ?? ''),
     );
   }
 

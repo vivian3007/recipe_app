@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   IngredientEditor,
@@ -13,6 +13,7 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Field, Loading } from '@/components/ui';
 import { getWeekPlan, updateMealAdjustments } from '@/lib/api';
 import { DAY_NAMES } from '@/lib/dates';
+import { confirm, notify } from '@/lib/dialogs';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { mealIngredients, type Ingredient, type WeekPlanMeal } from '@/lib/types';
@@ -44,7 +45,7 @@ export default function AdjustMeal() {
         setRows(rowsFromIngredients(mealIngredients(found)));
       })
       .catch((e) => {
-        Alert.alert('Laden mislukt', (e as Error).message);
+        notify('Laden mislukt', (e as Error).message);
         router.back();
       });
   }, [weekStart, mealId]);
@@ -56,7 +57,7 @@ export default function AdjustMeal() {
       await updateMealAdjustments(meal.id, adjustments);
       router.back();
     } catch (e) {
-      Alert.alert('Opslaan mislukt', (e as Error).message);
+      notify('Opslaan mislukt', (e as Error).message);
       setSaving(false);
     }
   }
@@ -71,11 +72,14 @@ export default function AdjustMeal() {
     });
   }
 
-  function confirmReset() {
-    Alert.alert('Terug naar het origineel?', 'Je opmerking en aangepaste ingrediënten voor deze avond worden gewist.', [
-      { text: 'Annuleren', style: 'cancel' },
-      { text: 'Terugzetten', style: 'destructive', onPress: () => save({ note: null, custom_ingredients: null }) },
-    ]);
+  async function confirmReset() {
+    const ok = await confirm(
+      'Terug naar het origineel?',
+      'Je opmerking en aangepaste ingrediënten voor deze avond worden gewist.',
+      'Terugzetten',
+      true,
+    );
+    if (ok) save({ note: null, custom_ingredients: null });
   }
 
   const hasChanges =

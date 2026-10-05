@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Loading, Stepper } from '@/components/ui';
 import { addMeal, getRecipe, getWeekPlan, replaceMeal } from '@/lib/api';
 import { DAY_NAMES, addWeeks, dateOfDay, formatShort, weekLabel, weekRange } from '@/lib/dates';
+import { choose, notify } from '@/lib/dialogs';
 import { setSelectedWeek, useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -45,20 +46,22 @@ export default function AddToWeek() {
       setSelectedWeek(weekStart);
       router.back();
     } catch (e) {
-      Alert.alert('Toevoegen mislukt', (e as Error).message);
+      notify('Toevoegen mislukt', (e as Error).message);
     }
   }
 
-  function onDay(day: number) {
+  async function onDay(day: number) {
     const existing = meals?.filter((m) => m.day === day) ?? [];
     if (existing.length === 0) return add(day);
     const titles = existing.map((m) => m.recipe.title).join(' en ');
-    Alert.alert('Al iets gepland', `Op ${DAY_NAMES[day].toLowerCase()} staat al ${titles}. Wil je dit gerecht erbij zetten?`, [
-      { text: 'Annuleren', style: 'cancel' },
+    const choice = await choose(
+      'Al iets gepland',
+      `Op ${DAY_NAMES[day].toLowerCase()} staat al ${titles}. Wil je dit gerecht erbij zetten?`,
       // Replacing is only clear when there is exactly one dish.
-      ...(existing.length === 1 ? [{ text: 'Vervangen', onPress: () => add(day, existing[0]) }] : []),
-      { text: 'Erbij zetten', onPress: () => add(day) },
-    ]);
+      existing.length === 1 ? [{ text: 'Erbij zetten' }, { text: `${titles} vervangen` }] : [{ text: 'Erbij zetten' }],
+    );
+    if (choice === 0) add(day);
+    else if (choice === 1) add(day, existing[0]);
   }
 
   if (!recipe) return <Loading />;

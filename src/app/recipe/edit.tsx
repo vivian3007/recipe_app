@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +24,7 @@ import { RecipeImage } from '@/components/RecipeCard';
 import { TagInput } from '@/components/TagInput';
 import { Button, Field, Loading, Stepper } from '@/components/ui';
 import { getRecipe, listRecipes, pickAndUploadImage, saveRecipe } from '@/lib/api';
+import { confirm, notify } from '@/lib/dialogs';
 import { BlockedError, importRecipe, normalizeUrl, type ImportedRecipe } from '@/lib/recipeImport';
 import { useSession } from '@/lib/session';
 import { tagsByUse } from '@/lib/tags';
@@ -94,7 +94,7 @@ export default function EditRecipe() {
         setIngredients(rowsFromIngredients(r.recipe_ingredients));
         if (r.created_by !== profile?.id) setOtherAuthor(r.author?.display_name ?? 'iemand anders');
       })
-      .catch((e) => Alert.alert('Laden mislukt', (e as Error).message))
+      .catch((e) => notify('Laden mislukt', (e as Error).message))
       .finally(() => setLoading(false));
   }, [id, profile?.id]);
 
@@ -105,7 +105,7 @@ export default function EditRecipe() {
       const url = await pickAndUploadImage(household.id);
       if (url) setImageUrl(url);
     } catch (e) {
-      Alert.alert('Foto uploaden mislukt', (e as Error).message);
+      notify('Foto uploaden mislukt', (e as Error).message);
     } finally {
       setUploading(false);
     }
@@ -150,14 +150,14 @@ export default function EditRecipe() {
     try {
       const result = await importRecipe(sourceUrl);
       const hasContent = !!title.trim() || rowsToIngredients(ingredients).length > 0;
-      if (hasContent) {
-        Alert.alert('Gegevens overnemen?', 'Wat je al hebt ingevuld wordt vervangen door het recept van de website.', [
-          { text: 'Annuleren', style: 'cancel' },
-          { text: 'Overnemen', onPress: () => applyImport(result) },
-        ]);
-      } else {
-        applyImport(result);
-      }
+      const replace =
+        !hasContent ||
+        (await confirm(
+          'Gegevens overnemen?',
+          'Wat je al hebt ingevuld wordt vervangen door het recept van de website.',
+          'Overnemen',
+        ));
+      if (replace) applyImport(result);
     } catch (e) {
       setImportMessage({
         ok: false,
@@ -175,7 +175,7 @@ export default function EditRecipe() {
     if (!household || !profile) return;
     const link = sourceUrl.trim() ? normalizeUrl(sourceUrl) : null;
     if (sourceUrl.trim() && !link) {
-      Alert.alert('Link klopt niet', 'Controleer de link naar het recept, of maak het veld leeg.');
+      notify('Link klopt niet', 'Controleer de link naar het recept, of maak het veld leeg.');
       return;
     }
     setSaving(true);
@@ -198,7 +198,7 @@ export default function EditRecipe() {
       if (id) router.back();
       else router.replace({ pathname: '/recipe/[id]', params: { id: savedId } });
     } catch (e) {
-      Alert.alert('Opslaan mislukt', (e as Error).message);
+      notify('Opslaan mislukt', (e as Error).message);
       setSaving(false);
     }
   }

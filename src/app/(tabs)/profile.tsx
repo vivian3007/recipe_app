@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Card, Field } from '@/components/ui';
 import { updateDisplayName } from '@/lib/api';
 import { getDemoSession } from '@/lib/api.demo';
+import { confirm, notify } from '@/lib/dialogs';
 import { useSession } from '@/lib/session';
 import { isDemo } from '@/lib/supabase';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -22,7 +23,7 @@ export default function ProfileScreen() {
       await updateDisplayName(profile.id, name.trim());
       await refresh();
     } catch (e) {
-      Alert.alert('Opslaan mislukt', (e as Error).message);
+      notify('Opslaan mislukt', (e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -35,25 +36,22 @@ export default function ProfileScreen() {
     });
   }
 
-  function confirmSignOut() {
+  async function confirmSignOut() {
     if (isDemo) {
-      Alert.alert('Demo opnieuw beginnen?', 'Alles wat je hebt toegevoegd of veranderd wordt gewist.', [
-        { text: 'Annuleren', style: 'cancel' },
-        {
-          text: 'Opnieuw beginnen',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-            setName(getDemoSession().profile.display_name);
-          },
-        },
-      ]);
+      if (
+        await confirm(
+          'Demo opnieuw beginnen?',
+          'Alles wat je hebt toegevoegd of veranderd wordt gewist.',
+          'Opnieuw beginnen',
+          true,
+        )
+      ) {
+        await signOut();
+        setName(getDemoSession().profile.display_name);
+      }
       return;
     }
-    Alert.alert('Uitloggen?', undefined, [
-      { text: 'Annuleren', style: 'cancel' },
-      { text: 'Uitloggen', style: 'destructive', onPress: signOut },
-    ]);
+    if (await confirm('Uitloggen?', undefined, 'Uitloggen', true)) signOut();
   }
 
   return (
