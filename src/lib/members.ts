@@ -1,4 +1,4 @@
-import { weekStartOf, weeksBetween, fromISODate } from './dates';
+import { dateOfDay, weekStartOf, weeksBetween } from './dates';
 import type { Household, Profile } from './types';
 
 const PALETTE = ['#3E7B5A', '#E8613C', '#3D6FB6', '#8A57B8', '#B8860B', '#C2417A'];
@@ -29,7 +29,9 @@ function rotationOf(household: Household | null, members: Profile[]): string[] {
 export function rotationChooser(household: Household | null, members: Profile[], weekStart: string): string | null {
   const rotation = rotationOf(household, members);
   if (!rotation.length || !household?.rotation_start) return null;
-  const weeks = weeksBetween(weekStartOf(fromISODate(household.rotation_start)), weekStart);
+  // rotation_start may be from before the shopping day changed: take the shopping week that
+  // holds most of that week (its middle day), just like the planned dishes moved along.
+  const weeks = weeksBetween(weekStartOf(dateOfDay(household.rotation_start, 3)), weekStart);
   return rotation[((weeks % rotation.length) + rotation.length) % rotation.length];
 }
 

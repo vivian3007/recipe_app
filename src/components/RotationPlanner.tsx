@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { DragHandle } from '@/components/DragHandle';
+import { addWeeks, weekRange, weekStartOf } from '@/lib/dates';
 import { memberColor } from '@/lib/members';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 
 // Every row has the same height, so a member's position follows from its place in the list.
 // The turn labels stay put; the names are a layer on top that you can drag up and down.
-const ROW_H = 44;
-const LABEL_W = 100;
+const ROW_H = 48;
+const LABEL_W = 110;
 // As in the week plan: the list re-renders while dragging, which would interrupt native-driver animations.
 const useNativeDriver = false;
 
@@ -145,11 +146,12 @@ export function RotationPlanner({
       ) : (
         <View style={{ gap: spacing(2) }}>
           <View style={{ height: rotation.length * ROW_H }}>
-            {/* Turn labels: fixed, one per week. */}
+            {/* Turn labels: fixed, one per week. Weeks run from the shopping day, so show their dates. */}
             {rotation.map((_id, index) => (
-              <Text key={index} style={[styles.turn, { top: index * ROW_H }]}>
-                {turnLabel(index)}
-              </Text>
+              <View key={index} style={[styles.turn, { top: index * ROW_H }]}>
+                <Text style={styles.turnLabel}>{turnLabel(index)}</Text>
+                <Text style={styles.turnDates}>{weekRange(addWeeks(weekStartOf(), index))}</Text>
+              </View>
             ))}
             {/* Names: on top of the labels, each sliding to its own week. */}
             {rotation.map((id, index) => (
@@ -242,10 +244,10 @@ const styles = StyleSheet.create({
     left: 0,
     width: LABEL_W,
     height: ROW_H - 4,
-    lineHeight: ROW_H - 4,
-    fontSize: 13,
-    color: colors.textMuted,
+    justifyContent: 'center',
   },
+  turnLabel: { fontSize: 13, color: colors.text },
+  turnDates: { fontSize: 12, color: colors.textMuted },
   member: {
     position: 'absolute',
     top: 0,
