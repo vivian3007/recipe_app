@@ -58,7 +58,7 @@ export function Field({ label, style, ...props }: TextInputProps & { label?: str
   return (
     <View style={{ gap: spacing(1.5) }}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TextInput placeholderTextColor={colors.textMuted} style={[styles.input, style]} {...props} />
+      <TextInput placeholderTextColor={colors.placeholder} style={[styles.input, style]} {...props} />
     </View>
   );
 }

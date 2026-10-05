@@ -49,7 +49,7 @@ export function IngredientEditor({ rows, onChange }: { rows: IngredientRow[]; on
             value={row.quantity}
             onChangeText={(quantity) => updateRow(row.key, { quantity })}
             placeholder="200"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.placeholder}
             keyboardType="numbers-and-punctuation"
             style={[styles.input, { width: 64 }]}
           />
@@ -57,7 +57,7 @@ export function IngredientEditor({ rows, onChange }: { rows: IngredientRow[]; on
             value={row.unit}
             onChangeText={(unit) => updateRow(row.key, { unit })}
             placeholder="g"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.placeholder}
             autoCapitalize="none"
             style={[styles.input, { width: 64 }]}
           />
@@ -65,7 +65,7 @@ export function IngredientEditor({ rows, onChange }: { rows: IngredientRow[]; on
             value={row.name}
             onChangeText={(name) => updateRow(row.key, { name })}
             placeholder="gehakt"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.placeholder}
             style={[styles.input, { flex: 1 }]}
           />
           <Pressable hitSlop={8} onPress={() => removeRow(row.key)}>

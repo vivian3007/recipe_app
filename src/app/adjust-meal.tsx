@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   IngredientEditor,
@@ -9,12 +9,14 @@ import {
   rowsToIngredients,
   type IngredientRow,
 } from '@/components/IngredientEditor';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Field, Loading } from '@/components/ui';
 import { getWeekPlan, updateMealAdjustments } from '@/lib/api';
 import { DAY_NAMES } from '@/lib/dates';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { mealIngredients, type Ingredient, type WeekPlanMeal } from '@/lib/types';
+import { useConfirmLeave } from '@/lib/useConfirmLeave';
 
 /** Compares ingredient lists the way they would end up on the shopping list. */
 function sameIngredients(a: Ingredient[], b: Ingredient[]) {
@@ -76,6 +78,11 @@ export default function AdjustMeal() {
     ]);
   }
 
+  const hasChanges =
+    !!meal &&
+    (note.trim() !== (meal.note ?? '').trim() || !sameIngredients(rowsToIngredients(rows), mealIngredients(meal)));
+  useConfirmLeave(hasChanges && !saving);
+
   if (!meal) return <Loading />;
 
   const author =
@@ -83,11 +90,7 @@ export default function AdjustMeal() {
   const isAdjusted = !!meal.note || !!meal.custom_ingredients;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={80}
-    >
+    <KeyboardScreen>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 2 }}>
           <Text style={styles.title}>{meal.recipe.title}</Text>
@@ -127,7 +130,7 @@ export default function AdjustMeal() {
           <Button title="Terug naar het originele recept" variant="ghost" icon="arrow-undo" onPress={confirmReset} />
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 

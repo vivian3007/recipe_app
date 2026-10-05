@@ -2,6 +2,7 @@ import 'expo-sqlite/localStorage/install';
 import * as ImagePicker from 'expo-image-picker';
 
 import { weekStartOf } from './dates';
+import { replaceTags } from './tags';
 import type {
   DayChoosers,
   Household,
@@ -10,6 +11,7 @@ import type {
   Recipe,
   RecipeInput,
   RecipeWithIngredients,
+  ShoppingExtra,
   WeekPlan,
   WeekPlanMeal,
 } from './types';
@@ -34,6 +36,8 @@ type Store = {
   meals: MealRow[];
   choosers: { week_plan_id: string; day: number; chooser_id: string }[];
   checks: { week_plan_id: string; item_key: string }[];
+  /** Missing in demo data saved by older versions. */
+  extras?: ShoppingExtra[];
 };
 
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -236,6 +240,7 @@ function seedStore(): Store {
       servings,
       note: null,
       custom_ingredients: null,
+      created_at: new Date().toISOString(),
     });
   }
   // A mixed week: mum chooses Tuesday, Thursday and Friday, the demo user the rest.
@@ -340,6 +345,16 @@ export async function listRecipes(): Promise<Recipe[]> {
     .map((r) => withAuthor(store, r));
 }
 
+/**
+ * Replaces labels in every recipe of the household: merging and renaming (to a label) or
+ * removing (to null).
+ */
+export async function replaceTagsEverywhere(from: string[], to: string | null) {
+  mutate((s) => {
+    for (const recipe of s.recipes) recipe.tags = replaceTags(recipe.tags, from, to);
+  });
+}
+
 export async function getRecipe(id: string): Promise<RecipeWithIngredients> {
   const store = load();
   const recipe = store.recipes.find((r) => r.id === id);
@@ -430,7 +445,9 @@ export async function getWeekPlan(
   if (!plan) return { plan: null, meals: [], choosers };
   const meals = store.meals
     .filter((m) => m.week_plan_id === plan.id)
-    .sort((a, b) => a.day - b.day)
+    // Demo data saved by older versions has no created_at.
+    .map((m) => ({ ...m, created_at: m.created_at ?? '' }))
+    .sort((a, b) => a.day - b.day || a.created_at.localeCompare(b.created_at))
     .flatMap((m) => {
       const recipe = store.recipes.find((r) => r.id === m.recipe_id);
       return recipe ? [{ ...m, recipe: withIngredients(store, recipe) }] : [];
@@ -439,14 +456,29 @@ export async function getWeekPlan(
   return { plan: { ...plan }, meals, choosers };
 }
 
-export async function setMeal(_householdId: string, weekStart: string, day: number, recipeId: string, servings: number) {
+/** Adds a dish to an evening; an evening can have more than one dish. */
+export async function addMeal(_householdId: string, weekStart: string, day: number, recipeId: string, servings: number) {
   mutate((s) => {
     const plan = ensurePlan(s, weekStart);
-    const existing = s.meals.find((m) => m.week_plan_id === plan.id && m.day === day);
+    s.meals.push({
+      id: newId(),
+      week_plan_id: plan.id,
+      day,
+      recipe_id: recipeId,
+      servings,
+      note: null,
+      custom_ingredients: null,
+      created_at: new Date().toISOString(),
+    });
+  });
+}
+
+/** Puts another recipe in place of a planned dish. */
+export async function replaceMeal(mealId: string, recipeId: string, servings: number) {
+  mutate((s) => {
+    const meal = s.meals.find((m) => m.id === mealId);
     // A new dish starts without the previous dish's adjustments.
-    const fields = { recipe_id: recipeId, servings, note: null, custom_ingredients: null };
-    if (existing) Object.assign(existing, fields);
-    else s.meals.push({ id: newId(), week_plan_id: plan.id, day, ...fields });
+    if (meal) Object.assign(meal, { recipe_id: recipeId, servings, note: null, custom_ingredients: null });
   });
 }
 
@@ -459,14 +491,14 @@ export async function setDayChoosers(_householdId: string, weekStart: string, da
   });
 }
 
-/** Moves a dish to another day of its week; swaps when that day already has a dish. */
-export async function moveMeal(mealId: string, toDay: number) {
+/** Swaps all dishes of two evenings of the same week. */
+export async function swapDays(weekPlanId: string, dayA: number, dayB: number) {
   mutate((s) => {
-    const meal = s.meals.find((m) => m.id === mealId);
-    if (!meal) throw new Error('Gerecht niet gevonden');
-    const other = s.meals.find((m) => m.week_plan_id === meal.week_plan_id && m.day === toDay);
-    if (other) other.day = meal.day;
-    meal.day = toDay;
+    for (const meal of s.meals) {
+      if (meal.week_plan_id !== weekPlanId) continue;
+      if (meal.day === dayA) meal.day = dayB;
+      else if (meal.day === dayB) meal.day = dayA;
+    }
   });
 }
 
@@ -504,5 +536,23 @@ export async function setShoppingCheck(weekPlanId: string, itemKey: string, chec
   mutate((s) => {
     s.checks = s.checks.filter((c) => !(c.week_plan_id === weekPlanId && c.item_key === itemKey));
     if (checked) s.checks.push({ week_plan_id: weekPlanId, item_key: itemKey });
+  });
+}
+
+export async function listShoppingExtras(weekPlanId: string): Promise<ShoppingExtra[]> {
+  return (load().extras ?? []).filter((e) => e.week_plan_id === weekPlanId).map((e) => ({ ...e }));
+}
+
+export async function addShoppingExtra(_householdId: string, weekStart: string, _userId: string, name: string) {
+  mutate((s) => {
+    const plan = ensurePlan(s, weekStart);
+    s.extras = [...(s.extras ?? []), { id: newId(), week_plan_id: plan.id, name }];
+  });
+}
+
+export async function removeShoppingExtra(extra: ShoppingExtra) {
+  mutate((s) => {
+    s.extras = (s.extras ?? []).filter((e) => e.id !== extra.id);
+    s.checks = s.checks.filter((c) => !(c.week_plan_id === extra.week_plan_id && c.item_key === `extra:${extra.id}`));
   });
 }

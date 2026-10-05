@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ChooserPlanner } from '@/components/ChooserPlanner';
@@ -8,7 +8,7 @@ import { DragHandle } from '@/components/DragHandle';
 import { RecipeImage } from '@/components/RecipeCard';
 import { Loading, Stepper } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
-import { moveMeal, removeMeal, setDayChoosers, updateMealServings } from '@/lib/api';
+import { removeMeal, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
 import { DAY_NAMES, dateOfDay, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
 import { memberColor, memberLabel } from '@/lib/members';
 import { useSelectedWeek } from '@/lib/selectedWeek';
@@ -17,18 +17,46 @@ import { colors, radius, spacing } from '@/lib/theme';
 import type { WeekPlanMeal } from '@/lib/types';
 import { useWeekPlan } from '@/lib/useWeekPlan';
 
-// Every day card has the same height, so each dish's position follows from its day.
-// The dish cards are a separate layer on top of the day cards, which lets them slide
-// between days while you drag.
+// A day card grows with the number of dishes on that evening, so the position of every
+// card and dish follows from the dishes per day (see weekLayout). The dish cards are a
+// separate layer on top of the day cards, which lets them slide between days while you drag.
+// The dishes of one evening belong together: dragging one moves the whole evening.
 const BORDER = 2;
 const PAD = 12;
 const HEADER_H = 26;
 const INNER_GAP = 8;
 const CONTENT_H = 112;
-const CARD_H = BORDER * 2 + PAD * 2 + HEADER_H + INNER_GAP + CONTENT_H;
+const SLOT_GAP = 8;
 const CARD_GAP = 12;
 const CONTENT_TOP = BORDER + PAD + HEADER_H + INNER_GAP;
-const slotY = (day: number) => day * (CARD_H + CARD_GAP) + CONTENT_TOP;
+
+type WeekLayout = {
+  /** Dishes per day, in the order they were added. */
+  days: WeekPlanMeal[][];
+  tops: number[];
+  heights: number[];
+  total: number;
+  /** Position of every dish card. */
+  slots: Map<string, number>;
+};
+
+function weekLayout(meals: WeekPlanMeal[]): WeekLayout {
+  const days: WeekPlanMeal[][] = Array.from({ length: 7 }, () => []);
+  for (const meal of [...meals].sort((a, b) => a.created_at.localeCompare(b.created_at))) days[meal.day].push(meal);
+  const tops: number[] = [];
+  const heights: number[] = [];
+  const slots = new Map<string, number>();
+  let y = 0;
+  days.forEach((dayMeals, day) => {
+    // An empty day keeps room for the "Kies een gerecht" button.
+    const rows = Math.max(1, dayMeals.length);
+    tops[day] = y;
+    heights[day] = CONTENT_TOP + rows * CONTENT_H + (rows - 1) * SLOT_GAP + PAD + BORDER;
+    dayMeals.forEach((meal, i) => slots.set(meal.id, y + CONTENT_TOP + i * (CONTENT_H + SLOT_GAP)));
+    y += heights[day] + CARD_GAP;
+  });
+  return { days, tops, heights, total: y - CARD_GAP, slots };
+}
 
 const EDGE = 80; // distance from the top/bottom edge where dragging scrolls the list
 // The positions run on the JS driver: the screen re-renders while you drag (to light up the
@@ -38,26 +66,27 @@ const useNativeDriver = false;
 export default function Week() {
   const weekStart = useSelectedWeek();
   const { household, members, profile } = useSession();
-  const { meals, setMeals, choosers, setChoosers, loading, error, reload } = useWeekPlan(weekStart);
+  const { plan, meals, setMeals, choosers, setChoosers, loading, error, reload } = useWeekPlan(weekStart);
   const [refreshing, setRefreshing] = useState(false);
+  const layout = useMemo(() => weekLayout(meals), [meals]);
 
   // One position per dish card. Kept in state (not a ref) because the cards render from it.
   const [positions] = useState(() => new Map<string, Animated.Value>());
   const positionOf = (meal: WeekPlanMeal) => {
     let value = positions.get(meal.id);
     if (!value) {
-      value = new Animated.Value(slotY(meal.day));
+      value = new Animated.Value(layout.slots.get(meal.id) ?? 0);
       positions.set(meal.id, value);
     }
     return value;
   };
-  const slideTo = (mealId: string, day: number) => {
+  const slideTo = (mealId: string, y: number | undefined) => {
     const value = positions.get(mealId);
-    if (value) Animated.spring(value, { toValue: slotY(day), friction: 8, tension: 90, useNativeDriver }).start();
+    if (value && y != null) Animated.spring(value, { toValue: y, friction: 8, tension: 90, useNativeDriver }).start();
   };
 
   // ---- Dragging ----
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingDay, setDraggingDay] = useState<number | null>(null);
   const [hoverDay, setHoverDay] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const frameRef = useRef<View>(null);
@@ -68,20 +97,21 @@ export default function Week() {
     cardsTop: 0,
     scrollY: 0,
     pageY: 0,
-    grabOffset: 0,
-    meal: null as WeekPlanMeal | null,
+    /** The day being dragged, with each dish's distance to the finger. */
+    from: null as number | null,
+    offsets: [] as { id: string; offset: number }[],
     hover: null as number | null,
-    others: [] as WeekPlanMeal[],
+    layout: null as WeekLayout | null,
     timer: null as ReturnType<typeof setInterval> | null,
   });
 
-  // When the dishes change (loaded, moved, another week), slide every card to its day.
+  // When the dishes change (loaded, moved, another week), slide every card to its place.
   useEffect(() => {
-    if (drag.current.meal) return;
-    for (const meal of meals) slideTo(meal.id, meal.day);
+    if (drag.current.from != null) return;
+    for (const meal of meals) slideTo(meal.id, layout.slots.get(meal.id));
     // slideTo only reads the positions map, which never changes identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meals]);
+  }, [layout]);
 
   useEffect(() => () => stopAutoScroll(), []);
 
@@ -99,34 +129,34 @@ export default function Week() {
     return d.pageY - d.listTop + d.scrollY - d.cardsTop;
   }
 
-  function startDrag(meal: WeekPlanMeal, pageY: number) {
+  function startDrag(day: number, pageY: number) {
     measureList();
     const d = drag.current;
     d.pageY = pageY;
-    d.meal = meal;
-    d.hover = meal.day;
-    d.others = meals.filter((m) => m.id !== meal.id);
-    d.grabOffset = pointerY() - slotY(meal.day);
-    setDraggingId(meal.id);
-    setHoverDay(meal.day);
+    d.from = day;
+    d.hover = day;
+    d.layout = layout;
+    const finger = pointerY();
+    d.offsets = layout.days[day].map((m) => ({ id: m.id, offset: (layout.slots.get(m.id) ?? 0) - finger }));
+    setDraggingDay(day);
+    setHoverDay(day);
     stopAutoScroll();
     d.timer = setInterval(stepAutoScroll, 16);
   }
 
   function follow() {
     const d = drag.current;
-    if (!d.meal) return;
-    const y = pointerY() - d.grabOffset;
-    positions.get(d.meal.id)?.setValue(y);
-    // The day whose slot is closest to the dragged card's position.
-    const day = Math.min(6, Math.max(0, Math.round((y - CONTENT_TOP) / (CARD_H + CARD_GAP))));
+    if (d.from == null || !d.layout || !d.offsets.length) return;
+    const finger = pointerY();
+    for (const { id, offset } of d.offsets) positions.get(id)?.setValue(finger + offset);
+    // The day card under the middle of the dragged evening.
+    const first = finger + d.offsets[0].offset;
+    const last = finger + d.offsets[d.offsets.length - 1].offset + CONTENT_H;
+    const middle = (first + last) / 2;
+    const { tops } = d.layout;
+    let day = 0;
+    while (day < 6 && middle >= tops[day + 1] - CARD_GAP / 2) day++;
     if (day === d.hover) return;
-    const source = d.meal.day;
-    // The dish that was making room goes back; the dish on the new day slides into the gap.
-    const previous = d.others.find((m) => m.day === d.hover);
-    if (previous) slideTo(previous.id, previous.day);
-    const next = d.others.find((m) => m.day === day);
-    if (next) slideTo(next.id, source);
     d.hover = day;
     setHoverDay(day);
   }
@@ -159,29 +189,26 @@ export default function Week() {
   function endDrag(dropped: boolean) {
     stopAutoScroll();
     const d = drag.current;
-    const meal = d.meal;
+    const from = d.from;
     const target = d.hover;
-    d.meal = null;
-    setDraggingId(null);
+    d.from = null;
+    setDraggingDay(null);
     setHoverDay(null);
-    if (!meal) return;
+    if (from == null) return;
 
-    if (!dropped || target == null || target === meal.day) {
-      // Put everything back where it was.
-      slideTo(meal.id, meal.day);
-      for (const m of d.others) slideTo(m.id, m.day);
+    if (!dropped || target == null || target === from) {
+      for (const { id } of d.offsets) slideTo(id, layout.slots.get(id));
       return;
     }
-    slideTo(meal.id, target);
-    moveTo(meal, target);
+    swapEvenings(from, target);
   }
 
-  async function moveTo(meal: WeekPlanMeal, day: number) {
-    setMeals((prev) =>
-      prev.map((m) => (m.id === meal.id ? { ...m, day } : m.day === day ? { ...m, day: meal.day } : m)),
-    );
+  /** Swaps all dishes of two evenings; the cards then slide to their new places. */
+  async function swapEvenings(a: number, b: number) {
+    if (!plan) return;
+    setMeals((prev) => prev.map((m) => (m.day === a ? { ...m, day: b } : m.day === b ? { ...m, day: a } : m)));
     try {
-      await moveMeal(meal.id, day);
+      await swapDays(plan.id, a, b);
     } catch (e) {
       Alert.alert('Verplaatsen mislukt', (e as Error).message);
     }
@@ -223,8 +250,14 @@ export default function Week() {
     ]);
   }
 
-  function pick(day: number) {
-    router.push({ pathname: '/pick-recipe', params: { weekStart, day: String(day) } });
+  /** Choose a dish for the day, or with `replacing`, another dish in its place. */
+  function pick(day: number, replacing?: WeekPlanMeal) {
+    router.push({
+      pathname: '/pick-recipe',
+      params: replacing
+        ? { weekStart, day: String(day), mealId: replacing.id, servings: String(replacing.servings) }
+        : { weekStart, day: String(day) },
+    });
   }
 
   async function onRefresh() {
@@ -236,14 +269,12 @@ export default function Week() {
   if (loading) return <Loading />;
 
   const isCurrentWeek = weekStart === weekStartOf();
-  const mealDays = new Set(meals.map((m) => m.day));
-  const draggedDay = meals.find((m) => m.id === draggingId)?.day;
 
   return (
     <View ref={frameRef} style={{ flex: 1 }}>
       <ScrollView
         ref={scrollRef}
-        scrollEnabled={!draggingId}
+        scrollEnabled={draggingDay == null}
         onLayout={measureList}
         onContentSizeChange={(_w, h) => (drag.current.contentHeight = h)}
         onScroll={(e) => (drag.current.scrollY = e.nativeEvent.contentOffset.y)}
@@ -257,12 +288,12 @@ export default function Week() {
         {meals.length > 1 && (
           <Text style={styles.dragHint}>
             Houd <Ionicons name="reorder-three" size={14} color={colors.textMuted} /> vast en sleep een gerecht naar een
-            andere dag om te wisselen.
+            andere dag om te wisselen. Gerechten van dezelfde avond gaan samen mee.
           </Text>
         )}
 
         <View
-          style={{ height: 7 * CARD_H + 6 * CARD_GAP }}
+          style={{ height: layout.total }}
           onLayout={(e) => (drag.current.cardsTop = e.nativeEvent.layout.y)}
         >
           {/* Day cards: fixed slots with the day, date and who chooses. */}
@@ -270,13 +301,14 @@ export default function Week() {
             const isToday = isCurrentWeek && day === todayIndex();
             const chooser = choosers[day];
             const chooserName = memberLabel(chooser, members, profile?.id);
-            const isTarget = draggingId != null && hoverDay === day && day !== draggedDay;
+            const isTarget = draggingDay != null && hoverDay === day && day !== draggingDay;
+            const hasMeals = layout.days[day].length > 0;
             return (
               <View
                 key={day}
                 style={[
                   styles.day,
-                  { top: day * (CARD_H + CARD_GAP) },
+                  { top: layout.tops[day], height: layout.heights[day] },
                   isToday && styles.today,
                   isTarget && styles.target,
                 ]}
@@ -294,22 +326,34 @@ export default function Week() {
                       <Text style={styles.badgeText}>{chooserName} kiest</Text>
                     </View>
                   )}
-                </View>
-                <View style={styles.slot}>
-                  {!mealDays.has(day) && (
-                    <Pressable style={styles.empty} onPress={() => pick(day)} disabled={!!draggingId}>
-                      <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
-                      <Text style={styles.emptyText}>Kies een gerecht</Text>
+                  {hasMeals && (
+                    <Pressable
+                      onPress={() => pick(day)}
+                      disabled={draggingDay != null}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.addMore, pressed && { opacity: 0.5 }]}
+                      accessibilityLabel={`Nog een gerecht op ${dayName.toLowerCase()}`}
+                    >
+                      <Ionicons name="add" size={16} color={colors.primaryDark} />
+                      <Text style={styles.addMoreText}>Erbij</Text>
                     </Pressable>
                   )}
                 </View>
+                {!hasMeals && (
+                  <View style={styles.slot}>
+                    <Pressable style={styles.empty} onPress={() => pick(day)} disabled={draggingDay != null}>
+                      <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                      <Text style={styles.emptyText}>Kies een gerecht</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             );
           })}
 
           {/* Dish cards: on top of the day cards, each sliding to its own day. */}
           {meals.map((meal) => {
-            const isDragged = meal.id === draggingId;
+            const isDragged = meal.day === draggingDay;
             return (
               <Animated.View
                 key={meal.id}
@@ -320,10 +364,10 @@ export default function Week() {
                 ]}
               >
                 <View style={styles.mealRow}>
-                  <DragHandle onStart={(y) => startDrag(meal, y)} onMove={moveDrag} onEnd={endDrag} />
+                  <DragHandle onStart={(y) => startDrag(meal.day, y)} onMove={moveDrag} onEnd={endDrag} />
                   <Pressable
                     style={styles.mealMain}
-                    disabled={!!draggingId}
+                    disabled={draggingDay != null}
                     onPress={() =>
                       router.push({
                         pathname: '/recipe/[id]',
@@ -363,7 +407,7 @@ export default function Week() {
                         router.push({ pathname: '/adjust-meal', params: { weekStart, mealId: meal.id } })
                       }
                     />
-                    <IconButton icon="refresh" label="Ander" onPress={() => pick(meal.day)} />
+                    <IconButton icon="refresh" label="Ander" onPress={() => pick(meal.day, meal)} />
                     <IconButton icon="trash-outline" label="Weg" onPress={() => confirmRemove(meal)} />
                   </View>
                 </View>
@@ -400,7 +444,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    height: CARD_H,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: PAD,
@@ -423,6 +466,16 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
   badgeText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  addMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing(2.5),
+    paddingVertical: spacing(1),
+  },
+  addMoreText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
   slot: { marginTop: INNER_GAP, height: CONTENT_H, justifyContent: 'center' },
   meal: {
     position: 'absolute',

@@ -1,14 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { colors, spacing } from '@/lib/theme';
 
 export function AuthScreen({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardScreen>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.logo}>
             <Ionicons name="restaurant" size={40} color="#fff" />
@@ -17,7 +18,7 @@ export function AuthScreen({ title, subtitle, children }: { title: string; subti
           <Text style={styles.subtitle}>{subtitle}</Text>
           <View style={styles.form}>{children}</View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardScreen>
     </SafeAreaView>
   );
 }

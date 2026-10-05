@@ -2,14 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { normalizeTag } from '@/lib/tags';
 import { colors, radius, spacing } from '@/lib/theme';
 
-/** Labels get the same spelling everywhere: trimmed, lowercase, no commas. */
-export function normalizeTag(input: string): string {
-  return input.replace(/,/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-}
+const SUGGESTIONS_SHOWN = 8;
 
-/** Type one label, add it, repeat. Earlier used labels are offered as suggestions. */
+/** Type one label, add it, repeat. Earlier used labels are offered as suggestions, most used first. */
 export function TagInput({
   tags,
   onChange,
@@ -20,6 +18,7 @@ export function TagInput({
   suggestions: string[];
 }) {
   const [text, setText] = useState('');
+  const [showAll, setShowAll] = useState(false);
   const typed = normalizeTag(text);
 
   function add(tag: string) {
@@ -28,7 +27,9 @@ export function TagInput({
     setText('');
   }
 
-  const open = suggestions.filter((s) => !tags.includes(s) && (!typed || s.includes(typed))).slice(0, 8);
+  const matching = suggestions.filter((s) => !tags.includes(s) && (!typed || s.includes(typed)));
+  const open = showAll ? matching : matching.slice(0, SUGGESTIONS_SHOWN);
+  const hidden = matching.length - open.length;
 
   return (
     <View style={{ gap: spacing(2) }}>
@@ -51,7 +52,7 @@ export function TagInput({
           submitBehavior="submit"
           returnKeyType="done"
           placeholder="Bijv. pasta"
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.placeholder}
           autoCapitalize="none"
           style={styles.input}
         />
@@ -72,6 +73,11 @@ export function TagInput({
               <Text style={styles.suggestionText}>{s}</Text>
             </Pressable>
           ))}
+          {hidden > 0 && (
+            <Pressable onPress={() => setShowAll(true)} style={styles.more} hitSlop={4}>
+              <Text style={styles.moreText}>+{hidden} meer</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -125,4 +131,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(2.5),
   },
   suggestionText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  more: { justifyContent: 'center', paddingVertical: spacing(1), paddingHorizontal: spacing(1) },
+  moreText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
 });

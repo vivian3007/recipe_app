@@ -38,6 +38,7 @@ function RootNavigator() {
         <Stack.Screen name="pick-recipe" options={{ title: 'Kies een gerecht', presentation: 'modal' }} />
         <Stack.Screen name="add-to-week" options={{ title: 'Toevoegen aan weekplan', presentation: 'modal' }} />
         <Stack.Screen name="adjust-meal" options={{ title: 'Aanpassen voor deze avond', presentation: 'modal' }} />
+        <Stack.Screen name="tags" options={{ title: 'Alle labels', presentation: 'modal' }} />
       </Stack.Protected>
     </Stack>
   );

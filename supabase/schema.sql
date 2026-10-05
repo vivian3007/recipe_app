@@ -58,7 +58,7 @@ create table public.week_plans (
   unique (household_id, week_start)
 );
 
--- day: 0 = Monday ... 6 = Sunday
+-- day: 0 = Monday ... 6 = Sunday. An evening can have more than one dish.
 create table public.week_plan_meals (
   id uuid primary key default gen_random_uuid(),
   week_plan_id uuid not null references public.week_plans (id) on delete cascade,
@@ -68,7 +68,7 @@ create table public.week_plan_meals (
   -- Adjustments for this evening only; the recipe itself stays unchanged.
   note text,
   custom_ingredients jsonb, -- [{ name, quantity, unit }], null = use the recipe's ingredients
-  unique (week_plan_id, day)
+  created_at timestamptz not null default now()
 );
 
 -- Who chooses the dish for each day. One person can do the whole week,
@@ -87,9 +87,19 @@ create table public.shopping_checks (
   primary key (week_plan_id, item_key)
 );
 
+-- Things added to the shopping list by hand (not from a recipe), e.g. "melk".
+create table public.shopping_extras (
+  id uuid primary key default gen_random_uuid(),
+  week_plan_id uuid not null references public.week_plans (id) on delete cascade,
+  name text not null check (length(trim(name)) > 0),
+  created_by uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 create index on public.recipes (household_id);
 create index on public.recipe_ingredients (recipe_id);
 create index on public.week_plan_meals (week_plan_id);
+create index on public.shopping_extras (week_plan_id);
 
 -- ============================================================
 -- Helpers
@@ -162,39 +172,21 @@ begin
 end;
 $$;
 
--- Move a dish to another day of the same week; swaps if that day already has a dish.
+-- Swap all dishes of two evenings of the same week (an evening can have more than one dish).
 -- Runs with the caller's rights, so row level security still applies.
-create or replace function public.move_meal(meal_id uuid, to_day int)
+create or replace function public.swap_days(plan_id uuid, day_a int, day_b int)
 returns void
-language plpgsql
+language sql
 security invoker
 set search_path = public
 as $$
-declare
-  m public.week_plan_meals;
-  t public.week_plan_meals;
-begin
-  select * into m from public.week_plan_meals where id = meal_id;
-  if m.id is null then
-    raise exception 'Gerecht niet gevonden';
-  end if;
-  if m.day = to_day then
-    return;
-  end if;
-  select * into t from public.week_plan_meals where week_plan_id = m.week_plan_id and day = to_day;
-  if t.id is not null then
-    delete from public.week_plan_meals where id = t.id;
-  end if;
-  update public.week_plan_meals set day = to_day where id = m.id;
-  if t.id is not null then
-    insert into public.week_plan_meals (id, week_plan_id, day, recipe_id, servings, note, custom_ingredients)
-    values (t.id, t.week_plan_id, m.day, t.recipe_id, t.servings, t.note, t.custom_ingredients);
-  end if;
-end;
+  update public.week_plan_meals
+  set day = case when day = day_a then day_b else day_a end
+  where week_plan_id = plan_id and day in (day_a, day_b);
 $$;
 
 grant execute on function public.create_household(text) to authenticated;
-grant execute on function public.move_meal(uuid, int) to authenticated;
+grant execute on function public.swap_days(uuid, int, int) to authenticated;
 grant execute on function public.join_household(text) to authenticated;
 
 -- ============================================================
@@ -210,6 +202,7 @@ alter table public.week_plans enable row level security;
 alter table public.week_plan_meals enable row level security;
 alter table public.week_plan_choosers enable row level security;
 alter table public.shopping_checks enable row level security;
+alter table public.shopping_extras enable row level security;
 
 create policy "own household" on public.households
   for select using (id = public.my_household_id());
@@ -259,6 +252,13 @@ create policy "household week choosers" on public.week_plan_choosers
   );
 
 create policy "household shopping checks" on public.shopping_checks
+  for all using (
+    exists (select 1 from public.week_plans p where p.id = week_plan_id and p.household_id = public.my_household_id())
+  ) with check (
+    exists (select 1 from public.week_plans p where p.id = week_plan_id and p.household_id = public.my_household_id())
+  );
+
+create policy "household shopping extras" on public.shopping_extras
   for all using (
     exists (select 1 from public.week_plans p where p.id = week_plan_id and p.household_id = public.my_household_id())
   ) with check (

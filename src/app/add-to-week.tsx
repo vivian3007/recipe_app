@@ -4,23 +4,23 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Loading, Stepper } from '@/components/ui';
-import { getRecipe, getWeekPlan, setMeal } from '@/lib/api';
+import { addMeal, getRecipe, getWeekPlan, replaceMeal } from '@/lib/api';
 import { DAY_NAMES, addWeeks, dateOfDay, formatShort, weekLabel, weekRange } from '@/lib/dates';
 import { setSelectedWeek, useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
-import type { RecipeWithIngredients, WeekPlanMeal } from '@/lib/types';
+import { DEFAULT_SERVINGS, type RecipeWithIngredients, type WeekPlanMeal } from '@/lib/types';
 
 export default function AddToWeek() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { household, members } = useSession();
+  const { household } = useSession();
   const selectedWeek = useSelectedWeek();
   const [weekStart, setWeekStart] = useState(selectedWeek);
   const [recipe, setRecipe] = useState<RecipeWithIngredients | null>(null);
   // Meals are stored with the week they belong to, so a stale week shows as loading.
   const [loaded, setLoaded] = useState<{ weekStart: string; meals: WeekPlanMeal[] } | null>(null);
   const meals = loaded?.weekStart === weekStart ? loaded.meals : null;
-  const [servings, setServings] = useState(Math.max(members.length, 1));
+  const [servings, setServings] = useState(DEFAULT_SERVINGS);
 
   useEffect(() => {
     getRecipe(id).then(setRecipe);
@@ -36,10 +36,12 @@ export default function AddToWeek() {
     };
   }, [weekStart]);
 
-  async function add(day: number) {
+  /** Adds the dish to the day, or puts it in place of `replacing`. */
+  async function add(day: number, replacing?: WeekPlanMeal) {
     if (!household) return;
     try {
-      await setMeal(household.id, weekStart, day, id, servings);
+      if (replacing) await replaceMeal(replacing.id, id, servings);
+      else await addMeal(household.id, weekStart, day, id, servings);
       setSelectedWeek(weekStart);
       router.back();
     } catch (e) {
@@ -48,11 +50,14 @@ export default function AddToWeek() {
   }
 
   function onDay(day: number) {
-    const existing = meals?.find((m) => m.day === day);
-    if (!existing) return add(day);
-    Alert.alert('Al iets gepland', `Op ${DAY_NAMES[day].toLowerCase()} staat al ${existing.recipe.title}. Vervangen?`, [
+    const existing = meals?.filter((m) => m.day === day) ?? [];
+    if (existing.length === 0) return add(day);
+    const titles = existing.map((m) => m.recipe.title).join(' en ');
+    Alert.alert('Al iets gepland', `Op ${DAY_NAMES[day].toLowerCase()} staat al ${titles}. Wil je dit gerecht erbij zetten?`, [
       { text: 'Annuleren', style: 'cancel' },
-      { text: 'Vervangen', onPress: () => add(day) },
+      // Replacing is only clear when there is exactly one dish.
+      ...(existing.length === 1 ? [{ text: 'Vervangen', onPress: () => add(day, existing[0]) }] : []),
+      { text: 'Erbij zetten', onPress: () => add(day) },
     ]);
   }
 
@@ -85,21 +90,21 @@ export default function AddToWeek() {
         <Loading />
       ) : (
         DAY_NAMES.map((name, day) => {
-          const existing = meals.find((m) => m.day === day);
+          const existing = meals.filter((m) => m.day === day);
           return (
             <Pressable key={day} onPress={() => onDay(day)} style={({ pressed }) => [styles.day, pressed && { opacity: 0.7 }]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.dayName}>
                   {name} <Text style={styles.dayDate}>{formatShort(dateOfDay(weekStart, day))}</Text>
                 </Text>
-                <Text style={[styles.dayMeal, !existing && { color: colors.accent }]} numberOfLines={1}>
-                  {existing ? existing.recipe.title : 'Nog vrij'}
+                <Text style={[styles.dayMeal, !existing.length && { color: colors.accent }]} numberOfLines={1}>
+                  {existing.length ? existing.map((m) => m.recipe.title).join(' + ') : 'Nog vrij'}
                 </Text>
               </View>
               <Ionicons
-                name={existing ? 'swap-horizontal' : 'add-circle'}
+                name={existing.length ? 'add-circle-outline' : 'add-circle'}
                 size={24}
-                color={existing ? colors.textMuted : colors.primary}
+                color={existing.length ? colors.textMuted : colors.primary}
               />
             </Pressable>
           );

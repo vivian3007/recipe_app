@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Card, Field } from '@/components/ui';
 import { updateDisplayName } from '@/lib/api';
 import { getDemoSession } from '@/lib/api.demo';
@@ -56,64 +57,66 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      {isDemo && (
-        <View style={styles.demo}>
-          <Ionicons name="flask-outline" size={20} color={colors.accent} />
-          <Text style={styles.demoText}>
-            Je gebruikt de demomodus. Alles staat alleen op deze telefoon, met voorbeeldrecepten. Koppel Supabase om
-            echt met je gezin te delen (zie de README).
-          </Text>
-        </View>
-      )}
-
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>{household?.name}</Text>
-        <Text style={styles.muted}>Deel deze code met je gezin, dan kunnen ze meedoen:</Text>
-        <View style={styles.codeBox}>
-          <Text style={styles.code}>{household?.invite_code}</Text>
-        </View>
-        <Button title="Code delen" icon="share-outline" variant="secondary" onPress={shareCode} />
-      </Card>
-
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Gezinsleden ({members.length})</Text>
-        {members.map((m) => (
-          <View key={m.id} style={styles.member}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{m.display_name.charAt(0).toUpperCase()}</Text>
-            </View>
-            <Text style={styles.memberName}>
-              {m.display_name}
-              {m.id === profile?.id ? ' (jij)' : ''}
+    <KeyboardScreen>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        {isDemo && (
+          <View style={styles.demo}>
+            <Ionicons name="flask-outline" size={20} color={colors.accent} />
+            <Text style={styles.demoText}>
+              Je gebruikt de demomodus. Alles staat alleen op deze telefoon, met voorbeeldrecepten. Koppel Supabase om
+              echt met je gezin te delen (zie de README).
             </Text>
           </View>
-        ))}
-      </Card>
+        )}
 
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Mijn account</Text>
-        <View style={styles.emailRow}>
-          <Ionicons name="mail-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.muted}>{isDemo ? 'Demo-account' : session?.user.email}</Text>
-        </View>
-        <Field label="Naam" value={name} onChangeText={setName} />
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>{household?.name}</Text>
+          <Text style={styles.muted}>Deel deze code met je gezin, dan kunnen ze meedoen:</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.code}>{household?.invite_code}</Text>
+          </View>
+          <Button title="Code delen" icon="share-outline" variant="secondary" onPress={shareCode} />
+        </Card>
+
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Gezinsleden ({members.length})</Text>
+          {members.map((m) => (
+            <View key={m.id} style={styles.member}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{m.display_name.charAt(0).toUpperCase()}</Text>
+              </View>
+              <Text style={styles.memberName}>
+                {m.display_name}
+                {m.id === profile?.id ? ' (jij)' : ''}
+              </Text>
+            </View>
+          ))}
+        </Card>
+
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Mijn account</Text>
+          <View style={styles.emailRow}>
+            <Ionicons name="mail-outline" size={16} color={colors.textMuted} />
+            <Text style={styles.muted}>{isDemo ? 'Demo-account' : session?.user.email}</Text>
+          </View>
+          <Field label="Naam" value={name} onChangeText={setName} />
+          <Button
+            title="Naam opslaan"
+            variant="secondary"
+            onPress={saveName}
+            loading={saving}
+            disabled={!name.trim() || name.trim() === profile?.display_name}
+          />
+        </Card>
+
         <Button
-          title="Naam opslaan"
-          variant="secondary"
-          onPress={saveName}
-          loading={saving}
-          disabled={!name.trim() || name.trim() === profile?.display_name}
+          title={isDemo ? 'Demo opnieuw beginnen' : 'Uitloggen'}
+          variant="danger"
+          icon={isDemo ? 'refresh' : 'log-out-outline'}
+          onPress={confirmSignOut}
         />
-      </Card>
-
-      <Button
-        title={isDemo ? 'Demo opnieuw beginnen' : 'Uitloggen'}
-        variant="danger"
-        icon={isDemo ? 'refresh' : 'log-out-outline'}
-        onPress={confirmSignOut}
-      />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 

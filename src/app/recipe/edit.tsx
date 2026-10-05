@@ -1,10 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -21,13 +20,16 @@ import {
   rowsToIngredients,
   type IngredientRow,
 } from '@/components/IngredientEditor';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { RecipeImage } from '@/components/RecipeCard';
 import { TagInput } from '@/components/TagInput';
 import { Button, Field, Loading, Stepper } from '@/components/ui';
 import { getRecipe, listRecipes, pickAndUploadImage, saveRecipe } from '@/lib/api';
 import { BlockedError, importRecipe, normalizeUrl, type ImportedRecipe } from '@/lib/recipeImport';
 import { useSession } from '@/lib/session';
+import { tagsByUse } from '@/lib/tags';
 import { colors, radius, spacing } from '@/lib/theme';
+import { useConfirmLeave } from '@/lib/useConfirmLeave';
 
 export default function EditRecipe() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -50,9 +52,30 @@ export default function EditRecipe() {
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Snapshot of everything that gets saved, to tell whether something changed since opening.
+  const snapshot = useMemo(
+    () =>
+      JSON.stringify([
+        title.trim(),
+        description.trim(),
+        imageUrl,
+        servings,
+        prepMinutes,
+        tags,
+        instructions.trim(),
+        sourceUrl.trim(),
+        rowsToIngredients(ingredients),
+      ]),
+    [title, description, imageUrl, servings, prepMinutes, tags, instructions, sourceUrl, ingredients],
+  );
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
+  if (!loading && initialSnapshot === null) setInitialSnapshot(snapshot);
+  useConfirmLeave(initialSnapshot !== null && snapshot !== initialSnapshot && !saving);
+
   useEffect(() => {
     listRecipes()
-      .then((all) => setKnownTags([...new Set(all.flatMap((r) => r.tags))].sort((x, y) => x.localeCompare(y, 'nl'))))
+      // Most used labels first, so the ones the family actually uses are on top.
+      .then((all) => setKnownTags(tagsByUse(all).map((t) => t.tag)))
       .catch(() => {});
   }, []);
 
@@ -183,7 +206,7 @@ export default function EditRecipe() {
   if (loading) return <Loading />;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
+    <KeyboardScreen>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         {otherAuthor && (
           <View style={styles.warning}>
@@ -205,7 +228,7 @@ export default function EditRecipe() {
                 setImportMessage(null);
               }}
               placeholder="https://www.leukerecepten.nl/..."
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.placeholder}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
@@ -276,7 +299,7 @@ export default function EditRecipe() {
 
         <Button title={id ? 'Wijzigingen opslaan' : 'Recept opslaan'} icon="checkmark" onPress={save} loading={saving} disabled={!title.trim() || uploading} />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardScreen>
   );
 }
 

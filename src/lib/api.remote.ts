@@ -2,7 +2,17 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { base64ToArrayBuffer } from './base64';
 import { supabase } from './supabase';
-import type { DayChoosers, Ingredient, Recipe, RecipeInput, RecipeWithIngredients, WeekPlan, WeekPlanMeal } from './types';
+import { replaceTags } from './tags';
+import type {
+  DayChoosers,
+  Ingredient,
+  Recipe,
+  RecipeInput,
+  RecipeWithIngredients,
+  ShoppingExtra,
+  WeekPlan,
+  WeekPlanMeal,
+} from './types';
 
 const RECIPE_FIELDS =
   'id, household_id, created_by, title, description, image_url, servings, prep_minutes, instructions, source_url, tags, created_at, author:profiles!recipes_created_by_fkey(display_name)';
@@ -30,6 +40,22 @@ export async function listRecipes(): Promise<Recipe[]> {
   return check(
     await supabase.from('recipes').select(RECIPE_FIELDS).order('created_at', { ascending: false }),
   ) as unknown as Recipe[];
+}
+
+/**
+ * Replaces labels in every recipe of the household: merging and renaming (to a label) or
+ * removing (to null). Safe to run again if it stops halfway.
+ */
+export async function replaceTagsEverywhere(from: string[], to: string | null) {
+  const recipes = check(await supabase.from('recipes').select('id, tags').overlaps('tags', from)) as {
+    id: string;
+    tags: string[];
+  }[];
+  await Promise.all(
+    recipes.map(async (r) =>
+      check(await supabase.from('recipes').update({ tags: replaceTags(r.tags, from, to) }).eq('id', r.id)),
+    ),
+  );
 }
 
 export async function getRecipe(id: string): Promise<RecipeWithIngredients> {
@@ -134,9 +160,12 @@ export async function getWeekPlan(
   const [mealsResult, choosersResult] = await Promise.all([
     supabase
       .from('week_plan_meals')
-      .select(`id, week_plan_id, day, recipe_id, servings, note, custom_ingredients, recipe:recipes(${RECIPE_FIELDS}, ${INGREDIENT_FIELDS})`)
+      .select(
+        `id, week_plan_id, day, recipe_id, servings, note, custom_ingredients, created_at, recipe:recipes(${RECIPE_FIELDS}, ${INGREDIENT_FIELDS})`,
+      )
       .eq('week_plan_id', plan.id)
-      .order('day'),
+      .order('day')
+      .order('created_at'),
     supabase.from('week_plan_choosers').select('day, chooser_id').eq('week_plan_id', plan.id),
   ]);
   const meals = (check(mealsResult) as unknown as WeekPlanMeal[]).filter((m) => m.recipe);
@@ -158,22 +187,20 @@ async function ensureWeekPlan(householdId: string, weekStart: string): Promise<W
   ) as WeekPlan;
 }
 
-export async function setMeal(
-  householdId: string,
-  weekStart: string,
-  day: number,
-  recipeId: string,
-  servings: number,
-) {
+/** Adds a dish to an evening; an evening can have more than one dish. */
+export async function addMeal(householdId: string, weekStart: string, day: number, recipeId: string, servings: number) {
   const plan = await ensureWeekPlan(householdId, weekStart);
+  check(await supabase.from('week_plan_meals').insert({ week_plan_id: plan.id, day, recipe_id: recipeId, servings }));
+}
+
+/** Puts another recipe in place of a planned dish. */
+export async function replaceMeal(mealId: string, recipeId: string, servings: number) {
   check(
     await supabase
       .from('week_plan_meals')
       // A new dish starts without the previous dish's adjustments.
-      .upsert(
-        { week_plan_id: plan.id, day, recipe_id: recipeId, servings, note: null, custom_ingredients: null },
-        { onConflict: 'week_plan_id,day' },
-      ),
+      .update({ recipe_id: recipeId, servings, note: null, custom_ingredients: null })
+      .eq('id', mealId),
   );
 }
 
@@ -191,9 +218,9 @@ export async function setDayChoosers(householdId: string, weekStart: string, day
   }
 }
 
-/** Moves a dish to another day of its week; swaps when that day already has a dish. */
-export async function moveMeal(mealId: string, toDay: number) {
-  check(await supabase.rpc('move_meal', { meal_id: mealId, to_day: toDay }));
+/** Swaps all dishes of two evenings of the same week. */
+export async function swapDays(weekPlanId: string, dayA: number, dayB: number) {
+  check(await supabase.rpc('swap_days', { plan_id: weekPlanId, day_a: dayA, day_b: dayB }));
 }
 
 /** Note and adjusted ingredients for one evening; pass null ingredients to go back to the recipe. */
@@ -227,4 +254,24 @@ export async function setShoppingCheck(weekPlanId: string, itemKey: string, chec
       await supabase.from('shopping_checks').delete().eq('week_plan_id', weekPlanId).eq('item_key', itemKey),
     );
   }
+}
+
+export async function listShoppingExtras(weekPlanId: string): Promise<ShoppingExtra[]> {
+  return check(
+    await supabase
+      .from('shopping_extras')
+      .select('id, week_plan_id, name')
+      .eq('week_plan_id', weekPlanId)
+      .order('created_at'),
+  ) as ShoppingExtra[];
+}
+
+export async function addShoppingExtra(householdId: string, weekStart: string, userId: string, name: string) {
+  const plan = await ensureWeekPlan(householdId, weekStart);
+  check(await supabase.from('shopping_extras').insert({ week_plan_id: plan.id, name, created_by: userId }));
+}
+
+export async function removeShoppingExtra(extra: ShoppingExtra) {
+  check(await supabase.from('shopping_extras').delete().eq('id', extra.id));
+  await setShoppingCheck(extra.week_plan_id, `extra:${extra.id}`, false);
 }

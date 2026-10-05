@@ -5,20 +5,27 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'r
 
 import { RecipeImage } from '@/components/RecipeCard';
 import { Chip, EmptyState, Loading, Stepper } from '@/components/ui';
-import { setMeal } from '@/lib/api';
+import { addMeal, replaceMeal } from '@/lib/api';
 import { DAY_NAMES, dateOfDay, formatShort } from '@/lib/dates';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
+import { DEFAULT_SERVINGS } from '@/lib/types';
 import { useRecipes } from '@/lib/useRecipes';
 
 export default function PickRecipe() {
-  const { weekStart, day: dayParam } = useLocalSearchParams<{ weekStart: string; day: string }>();
+  // With mealId, the chosen recipe replaces that dish; otherwise it is added to the day.
+  const {
+    weekStart,
+    day: dayParam,
+    mealId,
+    servings: servingsParam,
+  } = useLocalSearchParams<{ weekStart: string; day: string; mealId?: string; servings?: string }>();
   const day = Number(dayParam);
-  const { household, members } = useSession();
+  const { household } = useSession();
   const { recipes, favorites, loading } = useRecipes();
   const [query, setQuery] = useState('');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [servings, setServings] = useState(Math.max(members.length, 1));
+  const [servings, setServings] = useState(servingsParam ? Number(servingsParam) : DEFAULT_SERVINGS);
   const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => {
@@ -32,7 +39,8 @@ export default function PickRecipe() {
     if (!household || saving) return;
     setSaving(true);
     try {
-      await setMeal(household.id, weekStart, day, recipeId, servings);
+      if (mealId) await replaceMeal(mealId, recipeId, servings);
+      else await addMeal(household.id, weekStart, day, recipeId, servings);
       router.back();
     } catch (e) {
       Alert.alert('Opslaan mislukt', (e as Error).message);
@@ -63,7 +71,7 @@ export default function PickRecipe() {
               value={query}
               onChangeText={setQuery}
               placeholder="Zoek…"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.placeholder}
               style={styles.searchInput}
             />
           </View>

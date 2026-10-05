@@ -82,6 +82,8 @@ export type ShoppingItem = {
   quantity: number | null;
   unit: string;
   recipes: string[];
+  /** Set for things someone added to the list by hand. */
+  extraId?: string;
 };
 
 /** Combines the ingredients of all meals in a week, scaled to each meal's number of people. */
@@ -95,7 +97,9 @@ export function buildShoppingList(meals: WeekPlanMeal[]): ShoppingItem[] {
       if (!name) continue;
       const { unit, factor: unitFactor } = normalizeUnit(ing.unit);
       const key = `${name.toLowerCase()}|${unit}`;
-      const amount = ing.quantity == null ? null : ing.quantity * unitFactor * factor;
+      const scaled = ing.quantity == null ? null : ing.quantity * unitFactor * factor;
+      // Each dish needs its own whole tin/jar/onion: ½ tin for two dishes is still 2 tins, not 1.
+      const amount = scaled != null && isCountable(unit) ? roundForShopping(scaled, unit) : scaled;
 
       const existing = items.get(key);
       if (existing) {
@@ -112,6 +116,13 @@ export function buildShoppingList(meals: WeekPlanMeal[]): ShoppingItem[] {
     .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
 }
 
+const SMALL_UNITS = ['tl', 'el', 'theelepel', 'eetlepel', 'snufje', 'mespunt'];
+
+/** Pieces, tins, jars, cloves...: things you can only use whole. */
+function isCountable(unit: string) {
+  return unit !== 'g' && unit !== 'ml' && !SMALL_UNITS.includes(unit);
+}
+
 /**
  * You can't buy 5¼ eggs or ¾ jar of pesto: pieces, jars, cloves etc. are rounded up to whole
  * numbers, grams and milliliters to a convenient amount (188 g → 190 g).
@@ -122,6 +133,6 @@ function roundForShopping(quantity: number, unit: string): number {
     return Math.max(step, Math.ceil(quantity / step - 0.01) * step);
   }
   // Small units like teaspoons stay as they are.
-  if (['tl', 'el', 'theelepel', 'eetlepel', 'snufje', 'mespunt'].includes(unit)) return quantity;
+  if (SMALL_UNITS.includes(unit)) return quantity;
   return Math.max(1, Math.ceil(quantity - 0.05));
 }

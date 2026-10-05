@@ -8,6 +8,8 @@ export const colors = {
   accentSoft: '#E1F0E7',
   text: '#2B211C',
   textMuted: '#7D6E66',
+  /** Example text in empty fields: clearly lighter than real input. */
+  placeholder: '#BDB1AA',
   border: '#EFE3DA',
   danger: '#C0392B',
 };

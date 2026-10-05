@@ -48,6 +48,9 @@ export type WeekPlan = {
 /** Who chooses the dish per day, Monday (0) to Sunday (6); null when nobody is assigned yet. */
 export type DayChoosers = (string | null)[];
 
+/** Number of people a dish is planned for, unless you choose otherwise. */
+export const DEFAULT_SERVINGS = 4;
+
 export type WeekPlanMeal = {
   id: string;
   week_plan_id: string;
@@ -58,7 +61,16 @@ export type WeekPlanMeal = {
   note: string | null;
   /** Ingredients adjusted for this evening only; null means the recipe's own ingredients. */
   custom_ingredients: Ingredient[] | null;
+  /** Dishes on the same evening are shown in the order they were added. */
+  created_at: string;
   recipe: RecipeWithIngredients;
+};
+
+/** Something added to the shopping list by hand, e.g. "melk" or "2 pakken koffie". */
+export type ShoppingExtra = {
+  id: string;
+  week_plan_id: string;
+  name: string;
 };
 
 export type RecipeInput = {
