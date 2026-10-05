@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Weekmenu",
+    "slug": "weekmenu",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "nl.vlaanderen.weekmenu"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF4EC",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "nl.vlaanderen.weekmenu"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-sqlite",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Weekmenu wil je foto’s gebruiken om een foto bij een recept te zetten."
+        }
+      ],
+      "expo-font"
+    ],
+    "scheme": "weekmenu",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
