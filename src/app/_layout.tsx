@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { Loading } from '@/components/ui';
 import { SessionProvider, useSession } from '@/lib/session';
+import { useAppUpdates } from '@/lib/useAppUpdates';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
@@ -43,6 +44,7 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  useAppUpdates();
   return (
     <SessionProvider>
       <StatusBar style="dark" />

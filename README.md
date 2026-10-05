@@ -47,18 +47,38 @@ npx expo start
 
 Installeer **Expo Go** op je telefoon (App Store / Play Store) en scan de QR-code. Telefoon en computer moeten op hetzelfde wifi-netwerk zitten.
 
-## 3. Op de telefoons van het hele gezin zetten
+## 3. Op de telefoons van het hele gezin zetten (gratis)
 
-Expo Go is handig om te testen, maar voor een "echte" app op ieders telefoon gebruik je EAS Build:
+Beide routes gaan via een gratis Expo-account (`npx eas-cli@latest login`). De Supabase-gegevens staan als variabelen in de EAS-omgeving `preview`, anders start de gebouwde app in demomodus.
+
+**Android: installeerbare app (APK)**
 
 ```bash
-npx eas-cli@latest login
-npx eas-cli@latest build:configure
-npx eas-cli@latest build --platform android --profile preview   # .apk die je kunt delen
-npx eas-cli@latest build --platform ios                          # vereist een Apple Developer-account
+npx eas-cli@latest build --platform android --profile family
 ```
 
-Zet bij EAS ook de twee `EXPO_PUBLIC_...` variabelen als environment variables (`npx eas-cli@latest env:create`), anders weet de gebouwde app niet waar de database staat.
+Na het bouwen krijg je een link. Open die op een Android-telefoon, download de app en sta de installatie toe ("onbekende bron").
+
+**iPhone: web-app op het beginscherm**
+
+Een echte iPhone-app buiten de App Store kan niet gratis. De web-versie wel:
+
+```bash
+npx expo export --platform web
+npx eas-cli@latest deploy --prod
+```
+
+Open de link in **Safari**, tik op **Deel → Zet op beginscherm**. Weekmenu krijgt dan een icoon en opent schermvullend. Automatisch recepten ophalen van een link werkt in de web-versie niet (de link wordt wel bewaard).
+
+**Een nieuwe versie uitbrengen**
+
+- Android (automatische update, geen nieuwe APK nodig):
+  ```bash
+  npx eas-cli@latest update --channel family --environment preview --message "Wat er veranderd is"
+  ```
+  De app haalt de update op bij het opstarten en vraagt of hij wil herstarten.
+- Web/iPhone: opnieuw `npx expo export --platform web` en `npx eas-cli@latest deploy --prod`; bij de volgende keer openen is iedereen bij.
+- Een nieuwe APK is alleen nodig als er nieuwe native onderdelen bij komen (bijvoorbeeld een nieuwe Expo-module). De app krijgt dan geen update die niet bij zijn versie past.
 
 ## Hoe gebruik je het?
 

@@ -12,17 +12,26 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFF4EC",
+        "backgroundColor": "#E8613C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "nl.vlaanderen.weekmenu"
+      "package": "nl.vlaanderen.weekmenu",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single",
+      "name": "Weekmenu",
+      "shortName": "Weekmenu",
+      "themeColor": "#FFF8F2",
+      "backgroundColor": "#FFF8F2"
     },
     "plugins": [
       "expo-router",
@@ -40,6 +49,19 @@
     "scheme": "weekmenu",
     "experiments": {
       "typedRoutes": true
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "311f7726-535c-457a-aa82-8f9995b8dc55"
+      }
+    },
+    "owner": "1022620",
+    "updates": {
+      "url": "https://u.expo.dev/311f7726-535c-457a-aa82-8f9995b8dc55"
     }
   }
 }

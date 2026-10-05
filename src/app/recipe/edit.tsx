@@ -114,6 +114,14 @@ export default function EditRecipe() {
   }
 
   async function fetchFromLink() {
+    // Browsers don't allow reading other websites, so this only works in the installed app.
+    if (Platform.OS === 'web') {
+      setImportMessage({
+        ok: false,
+        text: 'Automatisch ophalen werkt alleen in de Android-app. Vul het recept zelf in; de link wordt bewaard, zodat iedereen het origineel kan bekijken.',
+      });
+      return;
+    }
     setImporting(true);
     setImportMessage(null);
     try {
