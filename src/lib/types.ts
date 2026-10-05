@@ -2,6 +2,12 @@ export type Household = {
   id: string;
   name: string;
   invite_code: string;
+  /** Weekday the weeks start on, Monday = 0 ... Sunday = 6. */
+  shopping_day: number;
+  /** Who chooses the whole week, in turns: one member per week, then from the start again. */
+  chooser_rotation: string[];
+  /** A week in which the first member of the rotation chooses. */
+  rotation_start: string | null;
 };
 
 export type Profile = {
@@ -45,8 +51,11 @@ export type WeekPlan = {
   week_start: string;
 };
 
-/** Who chooses the dish per day, Monday (0) to Sunday (6); null when nobody is assigned yet. */
+/** Who chooses the dish per day of the week (0 = the shopping day); null when nobody does. */
 export type DayChoosers = (string | null)[];
+
+/** Choosers set for one week only, per day; undefined where the day follows the rotation. */
+export type ChooserOverrides = (string | null | undefined)[];
 
 /** Number of people a dish is planned for, unless you choose otherwise. */
 export const DEFAULT_SERVINGS = 4;

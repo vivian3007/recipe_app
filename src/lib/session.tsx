@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import { getDemoSession, resetDemo } from './api.demo';
+import { applyShoppingDay } from './selectedWeek';
 import { isDemo, supabase } from './supabase';
 import type { Household, Profile } from './types';
 
@@ -19,9 +20,26 @@ type SessionState = {
 
 const SessionContext = createContext<SessionState | null>(null);
 
+/** Fills in the settings a database without the latest SQL doesn't have yet. */
+function withSettings(h: Partial<Household> & Pick<Household, 'id' | 'name' | 'invite_code'>): Household {
+  const household: Household = {
+    ...h,
+    shopping_day: h.shopping_day ?? 0,
+    chooser_rotation: h.chooser_rotation ?? [],
+    rotation_start: h.rotation_start ?? null,
+  };
+  // Weeks start on the shopping day; set before any screen sees the household.
+  applyShoppingDay(household.shopping_day);
+  return household;
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   // Demo mode has no login: its data is available immediately.
-  const [demoStart] = useState(() => (isDemo ? getDemoSession() : null));
+  const [demoStart] = useState(() => {
+    if (!isDemo) return null;
+    const demo = getDemoSession();
+    return { ...demo, household: withSettings(demo.household) };
+  });
   const [loading, setLoading] = useState(!isDemo);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(demoStart?.profile ?? null);
@@ -44,14 +62,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     if (p?.household_id) {
       const [{ data: h }, { data: m }] = await Promise.all([
-        supabase.from('households').select('id, name, invite_code').eq('id', p.household_id).single(),
+        // All columns, so the app keeps working before the SQL for newer settings has been run.
+        supabase.from('households').select('*').eq('id', p.household_id).single(),
         supabase
           .from('profiles')
           .select('id, display_name, household_id')
           .eq('household_id', p.household_id)
           .order('display_name'),
       ]);
-      setHousehold(h ?? null);
+      setHousehold(h ? withSettings(h) : null);
       setMembers(m ?? []);
     } else {
       setHousehold(null);
@@ -62,7 +81,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const loadDemo = useCallback(() => {
     const demo = getDemoSession();
     setProfile(demo.profile);
-    setHousehold(demo.household);
+    setHousehold(withSettings(demo.household));
     setMembers(demo.members);
   }, []);
 

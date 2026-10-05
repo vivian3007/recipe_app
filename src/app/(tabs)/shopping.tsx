@@ -25,7 +25,7 @@ import {
   removeShoppingExtra,
   setShoppingCheck,
 } from '@/lib/api';
-import { DAY_SHORT, weekLabel } from '@/lib/dates';
+import { dayShort, weekLabel } from '@/lib/dates';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -187,7 +187,7 @@ export default function Shopping() {
                 {meals.map((m) => (
                   <View key={m.id}>
                     <Text style={styles.mealLine} numberOfLines={1}>
-                      <Text style={{ fontWeight: '700' }}>{DAY_SHORT[m.day]}</Text>  {m.recipe.title} · {m.servings} pers.
+                      <Text style={{ fontWeight: '700' }}>{dayShort(weekStart, m.day)}</Text>  {m.recipe.title} · {m.servings} pers.
                     </Text>
                     {m.note && (
                       <View style={styles.noteRow}>

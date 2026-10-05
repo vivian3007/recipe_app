@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-import { weekStartOf } from './dates';
+import { dateOfDay, getShoppingDay, setShoppingDay, weekStartOf } from './dates';
 
 // The week shown on the Weekplan and Boodschappen tabs is shared, so switching
 // to next week on one tab also shows next week's list on the other.
@@ -20,4 +20,13 @@ export function useSelectedWeek(): string {
     },
     () => current,
   );
+}
+
+/** Weeks start on the household's shopping day; when it changes, the selected week follows. */
+export function applyShoppingDay(day: number) {
+  if (day === getShoppingDay()) return;
+  const wasThisWeek = current === weekStartOf();
+  setShoppingDay(day);
+  // Otherwise: the new week that holds most days of the week that was shown.
+  setSelectedWeek(wasThisWeek ? weekStartOf() : weekStartOf(dateOfDay(current, 3)));
 }

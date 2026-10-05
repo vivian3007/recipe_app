@@ -1,10 +1,10 @@
 import 'expo-sqlite/localStorage/install';
 import * as ImagePicker from 'expo-image-picker';
 
-import { weekStartOf } from './dates';
+import { dateOfDay, fromISODate, toISODate, weekStartOf, weekdayOf } from './dates';
 import { replaceTags } from './tags';
 import type {
-  DayChoosers,
+  ChooserOverrides,
   Household,
   Ingredient,
   Profile,
@@ -34,7 +34,8 @@ type Store = {
   favorites: string[];
   plans: WeekPlan[];
   meals: MealRow[];
-  choosers: { week_plan_id: string; day: number; chooser_id: string }[];
+  /** A week's own choice for a day; chooser_id null means nobody that day. */
+  choosers: { week_plan_id: string; day: number; chooser_id: string | null }[];
   checks: { week_plan_id: string; item_key: string }[];
   /** Missing in demo data saved by older versions. */
   extras?: ShoppingExtra[];
@@ -182,7 +183,15 @@ const SEED: Seed[] = [
 
 function seedStore(): Store {
   const store: Store = {
-    household: { id: HOUSEHOLD_ID, name: 'Demo-gezin', invite_code: 'DEMO42' },
+    household: {
+      id: HOUSEHOLD_ID,
+      name: 'Demo-gezin',
+      invite_code: 'DEMO42',
+      shopping_day: 0,
+      // Mum chooses this week, then the demo user, then dad, and so on.
+      chooser_rotation: ['demo-mama', DEMO_USER_ID, 'demo-papa'],
+      rotation_start: weekStartOf(),
+    },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
       { id: 'demo-papa', display_name: 'Papa', household_id: HOUSEHOLD_ID },
@@ -243,10 +252,8 @@ function seedStore(): Store {
       created_at: new Date().toISOString(),
     });
   }
-  // A mixed week: mum chooses Tuesday, Thursday and Friday, the demo user the rest.
-  for (let day = 0; day < 7; day++) {
-    store.choosers.push({ week_plan_id: plan.id, day, chooser_id: [1, 3, 4].includes(day) ? 'demo-mama' : DEMO_USER_ID });
-  }
+  // It's mum's turn, but the demo user swapped with her for Monday and Wednesday.
+  for (const day of [0, 2]) store.choosers.push({ week_plan_id: plan.id, day, chooser_id: DEMO_USER_ID });
   return store;
 }
 
@@ -438,11 +445,11 @@ export async function setFavorite(_userId: string, recipeId: string, favorite: b
 
 export async function getWeekPlan(
   weekStart: string,
-): Promise<{ plan: WeekPlan | null; meals: WeekPlanMeal[]; choosers: DayChoosers }> {
+): Promise<{ plan: WeekPlan | null; meals: WeekPlanMeal[]; chooserOverrides: ChooserOverrides }> {
   const store = load();
-  const choosers: DayChoosers = Array(7).fill(null);
+  const chooserOverrides: ChooserOverrides = Array(7).fill(undefined);
   const plan = findPlan(store, weekStart);
-  if (!plan) return { plan: null, meals: [], choosers };
+  if (!plan) return { plan: null, meals: [], chooserOverrides };
   const meals = store.meals
     .filter((m) => m.week_plan_id === plan.id)
     // Demo data saved by older versions has no created_at.
@@ -452,8 +459,8 @@ export async function getWeekPlan(
       const recipe = store.recipes.find((r) => r.id === m.recipe_id);
       return recipe ? [{ ...m, recipe: withIngredients(store, recipe) }] : [];
     });
-  for (const c of store.choosers) if (c.week_plan_id === plan.id) choosers[c.day] = c.chooser_id;
-  return { plan: { ...plan }, meals, choosers };
+  for (const c of store.choosers) if (c.week_plan_id === plan.id) chooserOverrides[c.day] = c.chooser_id;
+  return { plan: { ...plan }, meals, chooserOverrides };
 }
 
 /** Adds a dish to an evening; an evening can have more than one dish. */
@@ -482,12 +489,67 @@ export async function replaceMeal(mealId: string, recipeId: string, servings: nu
   });
 }
 
-/** Sets who chooses on the given days; null clears them. */
+/** Sets who chooses on the given days of one week; null means nobody, also when it's someone's turn. */
 export async function setDayChoosers(_householdId: string, weekStart: string, days: number[], chooserId: string | null) {
   mutate((s) => {
     const plan = ensurePlan(s, weekStart);
     s.choosers = s.choosers.filter((c) => !(c.week_plan_id === plan.id && days.includes(c.day)));
-    if (chooserId) for (const day of days) s.choosers.push({ week_plan_id: plan.id, day, chooser_id: chooserId });
+    for (const day of days) s.choosers.push({ week_plan_id: plan.id, day, chooser_id: chooserId });
+  });
+}
+
+/** The given days of one week follow the rotation again. */
+export async function resetDayChoosers(weekStart: string, days: number[]) {
+  mutate((s) => {
+    const plan = findPlan(s, weekStart);
+    if (plan) s.choosers = s.choosers.filter((c) => !(c.week_plan_id === plan.id && days.includes(c.day)));
+  });
+}
+
+/** Who chooses the whole week in turns, starting with whoever chooses the week of `rotationStart`. */
+export async function saveChooserRotation(_householdId: string, rotation: string[], rotationStart: string) {
+  mutate((s) => Object.assign(s.household, { chooser_rotation: rotation, rotation_start: rotationStart }));
+}
+
+/** Weeks start on the shopping day; everything planned moves along and keeps its date (as set_shopping_day). */
+export async function setShoppingDay(_householdId: string, day: number) {
+  mutate((s) => {
+    s.household.shopping_day = day;
+    const startOf = (date: Date) => {
+      const copy = new Date(date);
+      copy.setDate(copy.getDate() - ((weekdayOf(copy) - day + 7) % 7));
+      return toISODate(copy);
+    };
+    /** The new week holding `date`, and the date's day in it. */
+    const place = (date: Date) => {
+      const plan = ensurePlan(s, startOf(date));
+      return { plan, day: Math.round((date.getTime() - fromISODate(plan.week_start).getTime()) / 86_400_000) };
+    };
+    const old = s.plans.filter((p) => p.week_start !== startOf(fromISODate(p.week_start)));
+    for (const p of old) {
+      for (const m of s.meals.filter((m) => m.week_plan_id === p.id)) {
+        const to = place(dateOfDay(p.week_start, m.day));
+        Object.assign(m, { week_plan_id: to.plan.id, day: to.day });
+      }
+      for (const c of s.choosers.filter((c) => c.week_plan_id === p.id)) {
+        const to = place(dateOfDay(p.week_start, c.day));
+        if (!s.choosers.some((o) => o.week_plan_id === to.plan.id && o.day === to.day)) {
+          s.choosers.push({ week_plan_id: to.plan.id, day: to.day, chooser_id: c.chooser_id });
+        }
+      }
+      // The shopping list's own items and ticks go to the new week that holds most of the old one.
+      const middle = place(dateOfDay(p.week_start, 3)).plan;
+      for (const e of s.extras ?? []) if (e.week_plan_id === p.id) e.week_plan_id = middle.id;
+      for (const c of s.checks.filter((c) => c.week_plan_id === p.id)) {
+        if (!s.checks.some((o) => o.week_plan_id === middle.id && o.item_key === c.item_key)) {
+          s.checks.push({ week_plan_id: middle.id, item_key: c.item_key });
+        }
+      }
+    }
+    const oldIds = new Set(old.map((p) => p.id));
+    s.plans = s.plans.filter((p) => !oldIds.has(p.id));
+    s.choosers = s.choosers.filter((c) => !oldIds.has(c.week_plan_id));
+    s.checks = s.checks.filter((c) => !oldIds.has(c.week_plan_id));
   });
 }
 

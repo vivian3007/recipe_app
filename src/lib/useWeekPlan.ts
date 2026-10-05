@@ -2,12 +2,14 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { getWeekPlan } from './api';
-import type { DayChoosers, WeekPlan, WeekPlanMeal } from './types';
+import { useSession } from './session';
+import type { ChooserOverrides, WeekPlan, WeekPlanMeal } from './types';
 
 export function useWeekPlan(weekStart: string) {
+  const { refresh } = useSession();
   const [plan, setPlan] = useState<WeekPlan | null>(null);
   const [meals, setMeals] = useState<WeekPlanMeal[]>([]);
-  const [choosers, setChoosers] = useState<DayChoosers>(Array(7).fill(null));
+  const [chooserOverrides, setChooserOverrides] = useState<ChooserOverrides>(Array(7).fill(undefined));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +18,7 @@ export function useWeekPlan(weekStart: string) {
       const result = await getWeekPlan(weekStart);
       setPlan(result.plan);
       setMeals(result.meals);
-      setChoosers(result.choosers);
+      setChooserOverrides(result.chooserOverrides);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -28,8 +30,10 @@ export function useWeekPlan(weekStart: string) {
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      // Someone else may have changed the shopping day or the rotation.
+      refresh();
+    }, [load, refresh]),
   );
 
-  return { plan, meals, setMeals, choosers, setChoosers, loading, error, reload: load };
+  return { plan, meals, setMeals, chooserOverrides, setChooserOverrides, loading, error, reload: load };
 }

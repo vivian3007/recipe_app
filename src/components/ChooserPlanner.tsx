@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { DAY_SHORT } from '@/lib/dates';
+import { dayShort } from '@/lib/dates';
 import { memberColor, memberInitial } from '@/lib/members';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { DayChoosers, Profile } from '@/lib/types';
@@ -12,18 +12,26 @@ const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 /**
  * The "who chooses when" block at the top of the week plan. It shows who chooses which day;
  * the pencil opens editing: tap a name to give the whole week to one person, or tap a few
- * days first and then a name to split the week.
+ * days first and then a name to split the week. Days follow the rotation (`defaults`) until
+ * they're changed, and with `onReset` they go back to it.
  */
 export function ChooserPlanner({
+  weekStart,
   choosers,
+  defaults,
   members,
   meId,
   onAssign,
+  onReset,
 }: {
+  weekStart: string;
   choosers: DayChoosers;
+  /** Who chooses each day according to the rotation. */
+  defaults?: DayChoosers;
   members: Profile[];
   meId?: string;
   onAssign: (days: number[], chooserId: string | null) => void;
+  onReset?: (days: number[]) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
@@ -34,6 +42,16 @@ export function ChooserPlanner({
 
   function assign(chooserId: string | null) {
     onAssign(selected.length ? selected : ALL_DAYS, chooserId);
+    setSelected([]);
+  }
+
+  // Going back to the rotation is only offered when there is one and the week differs from it.
+  const hasDefaults = !!defaults?.some((c) => c);
+  const differs = (days: number[]) => !!defaults && days.some((d) => (choosers[d] ?? null) !== (defaults[d] ?? null));
+  const canReset = !!onReset && hasDefaults && differs(selected.length ? selected : ALL_DAYS);
+
+  function reset() {
+    onReset?.(selected.length ? selected : ALL_DAYS);
     setSelected([]);
   }
 
@@ -53,7 +71,12 @@ export function ChooserPlanner({
   return (
     <View style={styles.box}>
       <View style={styles.titleRow}>
-        <Text style={styles.title}>Wie kiest er?</Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.title}>Wie kiest er?</Text>
+          {onReset && hasDefaults && (
+            <Text style={styles.source}>{differs(ALL_DAYS) ? 'Aangepast voor deze week' : 'Volgens de vaste volgorde'}</Text>
+          )}
+        </View>
         {editing ? (
           <Pressable onPress={finish} hitSlop={8} style={styles.done}>
             <Ionicons name="checkmark" size={16} color="#fff" />
@@ -90,7 +113,7 @@ export function ChooserPlanner({
                   <Text style={styles.lineText}>
                     <Text style={styles.lineName}>{nameOf(member)}</Text>:{' '}
                     {ALL_DAYS.filter((d) => choosers[d] === member.id)
-                      .map((d) => DAY_SHORT[d])
+                      .map((d) => dayShort(weekStart, d))
                       .join(', ')}
                   </Text>
                 </View>
@@ -101,7 +124,7 @@ export function ChooserPlanner({
                   <Text style={[styles.lineText, { color: colors.textMuted }]}>
                     Nog open:{' '}
                     {ALL_DAYS.filter((d) => !choosers[d])
-                      .map((d) => DAY_SHORT[d])
+                      .map((d) => dayShort(weekStart, d))
                       .join(', ')}
                   </Text>
                 </View>
@@ -120,7 +143,7 @@ export function ChooserPlanner({
               return (
                 <Pressable key={day} onPress={() => toggleDay(day)} style={styles.day} hitSlop={2}>
                   <Text style={[styles.dayLabel, isSelected && { color: colors.primaryDark, fontWeight: '800' }]}>
-                    {DAY_SHORT[day]}
+                    {dayShort(weekStart, day)}
                   </Text>
                   <View style={[styles.ring, isSelected && styles.ringSelected]}>
                     <View
@@ -141,7 +164,7 @@ export function ChooserPlanner({
 
           <Text style={styles.hint}>
             {selected.length
-              ? `${selected.map((d) => DAY_SHORT[d]).join(', ')} geven aan:`
+              ? `${selected.map((d) => dayShort(weekStart, d)).join(', ')} geven aan:`
               : 'Hele week voor één persoon, of tik eerst op een paar dagen:'}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing(2) }}>
@@ -163,6 +186,12 @@ export function ChooserPlanner({
                 <Text style={[styles.chipText, { color: colors.textMuted }]}>Niemand</Text>
               </Pressable>
             )}
+            {canReset && (
+              <Pressable onPress={reset} style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}>
+                <Ionicons name="arrow-undo" size={14} color={colors.accent} />
+                <Text style={[styles.chipText, { color: colors.accent }]}>Vaste volgorde</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </>
       )}
@@ -174,6 +203,7 @@ const styles = StyleSheet.create({
   box: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: spacing(4), gap: spacing(3) },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing(2) },
   title: { fontSize: 17, fontWeight: '700', color: colors.text },
+  source: { fontSize: 12, color: colors.textMuted },
   pencil: {
     width: 32,
     height: 32,

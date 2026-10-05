@@ -6,7 +6,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { RecipeImage } from '@/components/RecipeCard';
 import { Chip, EmptyState, Loading, Stepper } from '@/components/ui';
 import { addMeal, replaceMeal } from '@/lib/api';
-import { DAY_NAMES, dateOfDay, formatShort } from '@/lib/dates';
+import { dateOfDay, dayName, formatShort } from '@/lib/dates';
 import { notify } from '@/lib/dialogs';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -61,7 +61,7 @@ export default function PickRecipe() {
         <View style={{ gap: spacing(3), marginBottom: spacing(2) }}>
           <View style={styles.dayBox}>
             <View>
-              <Text style={styles.dayName}>{DAY_NAMES[day]}</Text>
+              <Text style={styles.dayName}>{dayName(weekStart, day)}</Text>
               <Text style={styles.dayDate}>{formatShort(dateOfDay(weekStart, day))}</Text>
             </View>
             <Stepper value={servings} onChange={setServings} suffix="pers." />

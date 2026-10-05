@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Loading, Stepper } from '@/components/ui';
 import { addMeal, getRecipe, getWeekPlan, replaceMeal } from '@/lib/api';
-import { DAY_NAMES, addWeeks, dateOfDay, formatShort, weekLabel, weekRange } from '@/lib/dates';
+import { addWeeks, dateOfDay, dayName, formatShort, weekLabel, weekRange } from '@/lib/dates';
 import { choose, notify } from '@/lib/dialogs';
 import { setSelectedWeek, useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -56,7 +56,7 @@ export default function AddToWeek() {
     const titles = existing.map((m) => m.recipe.title).join(' en ');
     const choice = await choose(
       'Al iets gepland',
-      `Op ${DAY_NAMES[day].toLowerCase()} staat al ${titles}. Wil je dit gerecht erbij zetten?`,
+      `Op ${dayName(weekStart, day).toLowerCase()} staat al ${titles}. Wil je dit gerecht erbij zetten?`,
       // Replacing is only clear when there is exactly one dish.
       existing.length === 1 ? [{ text: 'Erbij zetten' }, { text: `${titles} vervangen` }] : [{ text: 'Erbij zetten' }],
     );
@@ -92,7 +92,8 @@ export default function AddToWeek() {
       {meals == null ? (
         <Loading />
       ) : (
-        DAY_NAMES.map((name, day) => {
+        [0, 1, 2, 3, 4, 5, 6].map((day) => {
+          const name = dayName(weekStart, day);
           const existing = meals.filter((m) => m.day === day);
           return (
             <Pressable key={day} onPress={() => onDay(day)} style={({ pressed }) => [styles.day, pressed && { opacity: 0.7 }]}>

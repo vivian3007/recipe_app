@@ -8,10 +8,10 @@ import { DragHandle } from '@/components/DragHandle';
 import { RecipeImage } from '@/components/RecipeCard';
 import { Loading, Stepper } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
-import { removeMeal, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
-import { DAY_NAMES, dateOfDay, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
+import { removeMeal, resetDayChoosers, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
+import { dateOfDay, dayName, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
-import { memberColor, memberLabel } from '@/lib/members';
+import { memberColor, memberLabel, rotationChooser } from '@/lib/members';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -59,6 +59,7 @@ function weekLayout(meals: WeekPlanMeal[]): WeekLayout {
   return { days, tops, heights, total: y - CARD_GAP, slots };
 }
 
+const DAYS = [0, 1, 2, 3, 4, 5, 6];
 const EDGE = 80; // distance from the top/bottom edge where dragging scrolls the list
 // The positions run on the JS driver: the screen re-renders while you drag (to light up the
 // target day), and that re-render would interrupt animations running on the native driver.
@@ -67,7 +68,12 @@ const useNativeDriver = false;
 export default function Week() {
   const weekStart = useSelectedWeek();
   const { household, members, profile } = useSession();
-  const { plan, meals, setMeals, choosers, setChoosers, loading, error, reload } = useWeekPlan(weekStart);
+  const { plan, meals, setMeals, chooserOverrides, setChooserOverrides, loading, error, reload } =
+    useWeekPlan(weekStart);
+  // Whoever's turn it is chooses the whole week, except on days changed for this week.
+  const turn = rotationChooser(household, members, weekStart);
+  const defaultChoosers = Array(7).fill(turn);
+  const choosers = chooserOverrides.map((c) => (c === undefined ? turn : c));
   const [refreshing, setRefreshing] = useState(false);
   const layout = useMemo(() => weekLayout(meals), [meals]);
 
@@ -219,9 +225,20 @@ export default function Week() {
   // ---- Other actions ----
   async function assignChoosers(days: number[], chooserId: string | null) {
     if (!household) return;
-    setChoosers((prev) => prev.map((c, day) => (days.includes(day) ? chooserId : c)));
+    setChooserOverrides((prev) => prev.map((c, day) => (days.includes(day) ? chooserId : c)));
     try {
       await setDayChoosers(household.id, weekStart, days, chooserId);
+    } catch (e) {
+      notify('Opslaan mislukt', (e as Error).message);
+      reload();
+    }
+  }
+
+  /** The given days follow the rotation from the family settings again. */
+  async function resetChoosers(days: number[]) {
+    setChooserOverrides((prev) => prev.map((c, day) => (days.includes(day) ? undefined : c)));
+    try {
+      await resetDayChoosers(weekStart, days);
     } catch (e) {
       notify('Opslaan mislukt', (e as Error).message);
       reload();
@@ -238,7 +255,7 @@ export default function Week() {
   }
 
   async function confirmRemove(meal: WeekPlanMeal) {
-    const message = `${meal.recipe.title} van ${DAY_NAMES[meal.day].toLowerCase()} halen?`;
+    const message = `${meal.recipe.title} van ${dayName(weekStart, meal.day).toLowerCase()} halen?`;
     if (!(await confirm('Gerecht weghalen?', message, 'Weghalen', true))) return;
     try {
       await removeMeal(meal.id);
@@ -281,7 +298,15 @@ export default function Week() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <WeekSwitcher weekStart={weekStart} />
-        <ChooserPlanner choosers={choosers} members={members} meId={profile?.id} onAssign={assignChoosers} />
+        <ChooserPlanner
+          weekStart={weekStart}
+          choosers={choosers}
+          defaults={defaultChoosers}
+          members={members}
+          meId={profile?.id}
+          onAssign={assignChoosers}
+          onReset={resetChoosers}
+        />
         {error && <Text style={{ color: colors.danger }}>{error}</Text>}
         {meals.length > 1 && (
           <Text style={styles.dragHint}>
@@ -295,7 +320,8 @@ export default function Week() {
           onLayout={(e) => (drag.current.cardsTop = e.nativeEvent.layout.y)}
         >
           {/* Day cards: fixed slots with the day, date and who chooses. */}
-          {DAY_NAMES.map((dayName, day) => {
+          {DAYS.map((day) => {
+            const name = dayName(weekStart, day);
             const isToday = isCurrentWeek && day === todayIndex();
             const chooser = choosers[day];
             const chooserName = memberLabel(chooser, members, profile?.id);
@@ -312,7 +338,7 @@ export default function Week() {
                 ]}
               >
                 <View style={styles.dayHeader}>
-                  <Text style={styles.dayName}>{dayName}</Text>
+                  <Text style={styles.dayName}>{name}</Text>
                   <Text style={styles.dayDate}>
                     {isToday ? 'Vandaag · ' : ''}
                     {formatShort(dateOfDay(weekStart, day))}
@@ -330,7 +356,7 @@ export default function Week() {
                       disabled={draggingDay != null}
                       hitSlop={8}
                       style={({ pressed }) => [styles.addMore, pressed && { opacity: 0.5 }]}
-                      accessibilityLabel={`Nog een gerecht op ${dayName.toLowerCase()}`}
+                      accessibilityLabel={`Nog een gerecht op ${name.toLowerCase()}`}
                     >
                       <Ionicons name="add" size={16} color={colors.primaryDark} />
                       <Text style={styles.addMoreText}>Erbij</Text>

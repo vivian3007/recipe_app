@@ -9,6 +9,11 @@ create table public.households (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   invite_code text not null unique default upper(substr(md5(random()::text), 1, 6)),
+  -- Weekday the weeks start on (Monday = 0 ... Sunday = 6).
+  shopping_day int not null default 0 check (shopping_day between 0 and 6),
+  -- Who chooses the whole week, in turns; rotation_start is a week in which the first one chooses.
+  chooser_rotation uuid[] not null default '{}',
+  rotation_start date,
   created_at timestamptz not null default now()
 );
 
@@ -50,7 +55,7 @@ create table public.favorites (
   primary key (user_id, recipe_id)
 );
 
--- One plan per household per week (week_start is always a Monday).
+-- One plan per household per week (week_start is always the household's shopping day).
 create table public.week_plans (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households (id) on delete cascade,
@@ -58,7 +63,7 @@ create table public.week_plans (
   unique (household_id, week_start)
 );
 
--- day: 0 = Monday ... 6 = Sunday. An evening can have more than one dish.
+-- day: 0 = the first day of the week (week_start) ... 6. An evening can have more than one dish.
 create table public.week_plan_meals (
   id uuid primary key default gen_random_uuid(),
   week_plan_id uuid not null references public.week_plans (id) on delete cascade,
@@ -71,12 +76,12 @@ create table public.week_plan_meals (
   created_at timestamptz not null default now()
 );
 
--- Who chooses the dish for each day. One person can do the whole week,
--- or the week can be split (e.g. mum chooses 3 evenings, I choose 4).
+-- Who chooses the dish on a day of one week, when that differs from the rotation
+-- (e.g. mum chooses 3 evenings, I choose 4). chooser_id null means nobody that day.
 create table public.week_plan_choosers (
   week_plan_id uuid not null references public.week_plans (id) on delete cascade,
   day int not null check (day between 0 and 6),
-  chooser_id uuid not null references public.profiles (id) on delete cascade,
+  chooser_id uuid references public.profiles (id) on delete cascade,
   primary key (week_plan_id, day)
 );
 
@@ -185,7 +190,85 @@ as $$
   where week_plan_id = plan_id and day in (day_a, day_b);
 $$;
 
+-- First day of the week containing d, when weeks start on weekday start_day (Monday = 0).
+create or replace function public.shopping_week_start(d date, start_day int)
+returns date
+language sql
+immutable
+as $$
+  select d - ((extract(isodow from d)::int - 1 - start_day + 7) % 7);
+$$;
+
+-- Changes the shopping day and moves everything that was planned into the new weeks:
+-- every dish stays on its own date. Runs with the caller's rights, so row level security applies.
+create or replace function public.set_shopping_day(new_day int)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  hh uuid := public.my_household_id();
+begin
+  if hh is null then
+    raise exception 'Geen gezin';
+  end if;
+  if new_day is null or new_day not between 0 and 6 then
+    raise exception 'Ongeldige dag';
+  end if;
+
+  update households set shopping_day = new_day where id = hh;
+
+  -- The new weeks: for every day with a dish or its own chooser, and for the middle of each old
+  -- week (the shopping list's own items and ticks go to the new week that holds most of it).
+  insert into week_plans (household_id, week_start)
+  select distinct hh, shopping_week_start(p.week_start + x.day, new_day)
+  from week_plans p
+  join (
+    select week_plan_id, day from week_plan_meals
+    union select week_plan_id, day from week_plan_choosers
+    union select id, 3 from week_plans
+  ) x on x.week_plan_id = p.id
+  where p.household_id = hh and p.week_start <> shopping_week_start(p.week_start, new_day)
+  on conflict (household_id, week_start) do nothing;
+
+  update week_plan_meals m
+  set week_plan_id = np.id, day = (p.week_start + m.day) - np.week_start
+  from week_plans p, week_plans np
+  where m.week_plan_id = p.id
+    and p.household_id = hh and p.week_start <> shopping_week_start(p.week_start, new_day)
+    and np.household_id = hh and np.week_start = shopping_week_start(p.week_start + m.day, new_day);
+
+  insert into week_plan_choosers (week_plan_id, day, chooser_id)
+  select np.id, (p.week_start + c.day) - np.week_start, c.chooser_id
+  from week_plan_choosers c
+  join week_plans p on p.id = c.week_plan_id
+  join week_plans np on np.household_id = hh and np.week_start = shopping_week_start(p.week_start + c.day, new_day)
+  where p.household_id = hh and p.week_start <> shopping_week_start(p.week_start, new_day)
+  on conflict (week_plan_id, day) do nothing;
+
+  update shopping_extras e
+  set week_plan_id = np.id
+  from week_plans p, week_plans np
+  where e.week_plan_id = p.id
+    and p.household_id = hh and p.week_start <> shopping_week_start(p.week_start, new_day)
+    and np.household_id = hh and np.week_start = shopping_week_start(p.week_start + 3, new_day);
+
+  insert into shopping_checks (week_plan_id, item_key)
+  select np.id, c.item_key
+  from shopping_checks c
+  join week_plans p on p.id = c.week_plan_id
+  join week_plans np on np.household_id = hh and np.week_start = shopping_week_start(p.week_start + 3, new_day)
+  where p.household_id = hh and p.week_start <> shopping_week_start(p.week_start, new_day)
+  on conflict (week_plan_id, item_key) do nothing;
+
+  -- The old weeks are empty now (what's left was copied above).
+  delete from week_plans where household_id = hh and week_start <> shopping_week_start(week_start, new_day);
+end;
+$$;
+
 grant execute on function public.create_household(text) to authenticated;
+grant execute on function public.set_shopping_day(int) to authenticated;
 grant execute on function public.swap_days(uuid, int, int) to authenticated;
 grant execute on function public.join_household(text) to authenticated;
 

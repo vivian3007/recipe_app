@@ -1,12 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
-import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { RotationPlanner } from '@/components/RotationPlanner';
 import { Button, Card, Field } from '@/components/ui';
-import { updateDisplayName } from '@/lib/api';
+import { saveChooserRotation, setShoppingDay, updateDisplayName } from '@/lib/api';
 import { getDemoSession } from '@/lib/api.demo';
+import { WEEKDAY_NAMES, WEEKDAY_SHORT, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
+import { rotationFromThisWeek } from '@/lib/members';
 import { useSession } from '@/lib/session';
 import { isDemo } from '@/lib/supabase';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -15,6 +19,51 @@ export default function ProfileScreen() {
   const { profile, household, members, session, refresh, signOut } = useSession();
   const [name, setName] = useState(profile?.display_name ?? '');
   const [saving, setSaving] = useState(false);
+  // Shown while a change to the rotation is being saved.
+  const [rotationDraft, setRotationDraft] = useState<string[] | null>(null);
+  const [savingDay, setSavingDay] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Someone else in the family may have changed the settings.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+
+  async function changeRotation(rotation: string[]) {
+    if (!household) return;
+    setRotationDraft(rotation);
+    try {
+      // The first in the list chooses this week.
+      await saveChooserRotation(household.id, rotation, weekStartOf());
+      await refresh();
+    } catch (e) {
+      notify('Opslaan mislukt', (e as Error).message);
+    } finally {
+      setRotationDraft(null);
+    }
+  }
+
+  async function changeShoppingDay(day: number) {
+    if (!household || day === household.shopping_day || savingDay != null) return;
+    const ok = await confirm(
+      `Boodschappen op ${WEEKDAY_NAMES[day].toLowerCase()}?`,
+      `De weken lopen dan van ${WEEKDAY_NAMES[day].toLowerCase()} t/m ${WEEKDAY_NAMES[(day + 6) % 7].toLowerCase()}. ` +
+        'Geplande gerechten blijven op hun eigen datum staan.',
+      'Wijzigen',
+    );
+    if (!ok) return;
+    setSavingDay(day);
+    try {
+      await setShoppingDay(household.id, day);
+      await refresh();
+    } catch (e) {
+      notify('Opslaan mislukt', (e as Error).message);
+    } finally {
+      setSavingDay(null);
+    }
+  }
 
   async function saveName() {
     if (!profile || !name.trim()) return;
@@ -56,7 +105,11 @@ export default function ProfileScreen() {
 
   return (
     <KeyboardScreen>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!dragging}
+      >
         {isDemo && (
           <View style={styles.demo}>
             <Ionicons name="flask-outline" size={20} color={colors.accent} />
@@ -90,6 +143,41 @@ export default function ProfileScreen() {
             </View>
           ))}
         </Card>
+
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Boodschappendag</Text>
+          <Text style={styles.muted}>
+            De week begint op de dag dat jullie boodschappen doen
+            {household
+              ? `: nu van ${WEEKDAY_NAMES[household.shopping_day].toLowerCase()} t/m ${WEEKDAY_NAMES[
+                  (household.shopping_day + 6) % 7
+                ].toLowerCase()}.`
+              : '.'}
+          </Text>
+          <View style={styles.weekdays}>
+            {WEEKDAY_SHORT.map((short, day) => {
+              const active = (savingDay ?? household?.shopping_day) === day;
+              return (
+                <Pressable
+                  key={day}
+                  onPress={() => changeShoppingDay(day)}
+                  accessibilityLabel={WEEKDAY_NAMES[day]}
+                  style={({ pressed }) => [styles.weekday, active && styles.weekdayActive, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[styles.weekdayText, active && styles.weekdayTextActive]}>{short}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+
+        <RotationPlanner
+          rotation={rotationDraft ?? rotationFromThisWeek(household, members)}
+          members={members}
+          meId={profile?.id}
+          onChange={changeRotation}
+          onDragging={setDragging}
+        />
 
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Mijn account</Text>
@@ -141,6 +229,20 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontWeight: '800', color: colors.accent },
   memberName: { fontSize: 16, color: colors.text },
+  weekdays: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing(1) },
+  weekday: {
+    flex: 1,
+    height: 40,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  weekdayText: { fontSize: 14, fontWeight: '700', color: colors.text },
+  weekdayTextActive: { color: '#fff' },
   emailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   demo: {
     flexDirection: 'row',

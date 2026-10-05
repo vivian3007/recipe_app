@@ -11,7 +11,7 @@ import { confirm, notify } from '@/lib/dialogs';
 import { formatAmount, scaleIngredient } from '@/lib/quantities';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
-import { DAY_NAMES } from '@/lib/dates';
+import { dayName } from '@/lib/dates';
 import { mealIngredients, type RecipeWithIngredients, type WeekPlanMeal } from '@/lib/types';
 
 export default function RecipeDetail() {
@@ -150,7 +150,7 @@ export default function RecipeDetail() {
             >
               <Ionicons name="create" size={20} color={colors.primaryDark} />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.adjustedTitle}>Aangepast voor {DAY_NAMES[meal.day].toLowerCase()}</Text>
+                <Text style={styles.adjustedTitle}>Aangepast voor {dayName(weekStart!, meal.day).toLowerCase()}</Text>
                 {meal.note && <Text style={styles.adjustedNote}>{meal.note}</Text>}
                 {meal.custom_ingredients && (
                   <Text style={styles.adjustedHint}>De ingrediënten hieronder zijn aangepast voor deze avond.</Text>

@@ -4,7 +4,7 @@ import { base64ToArrayBuffer } from './base64';
 import { supabase } from './supabase';
 import { replaceTags } from './tags';
 import type {
-  DayChoosers,
+  ChooserOverrides,
   Ingredient,
   Recipe,
   RecipeInput,
@@ -146,8 +146,8 @@ export async function setFavorite(userId: string, recipeId: string, favorite: bo
 
 export async function getWeekPlan(
   weekStart: string,
-): Promise<{ plan: WeekPlan | null; meals: WeekPlanMeal[]; choosers: DayChoosers }> {
-  const choosers: DayChoosers = Array(7).fill(null);
+): Promise<{ plan: WeekPlan | null; meals: WeekPlanMeal[]; chooserOverrides: ChooserOverrides }> {
+  const chooserOverrides: ChooserOverrides = Array(7).fill(undefined);
   const plan = check(
     await supabase
       .from('week_plans')
@@ -155,7 +155,7 @@ export async function getWeekPlan(
       .eq('week_start', weekStart)
       .maybeSingle(),
   ) as WeekPlan | null;
-  if (!plan) return { plan: null, meals: [], choosers };
+  if (!plan) return { plan: null, meals: [], chooserOverrides };
 
   const [mealsResult, choosersResult] = await Promise.all([
     supabase
@@ -170,8 +170,8 @@ export async function getWeekPlan(
   ]);
   const meals = (check(mealsResult) as unknown as WeekPlanMeal[]).filter((m) => m.recipe);
   meals.forEach((m) => sortIngredients(m.recipe));
-  for (const row of check(choosersResult) ?? []) choosers[row.day as number] = row.chooser_id as string;
-  return { plan, meals, choosers };
+  for (const row of check(choosersResult) ?? []) chooserOverrides[row.day as number] = row.chooser_id as string | null;
+  return { plan, meals, chooserOverrides };
 }
 
 async function ensureWeekPlan(householdId: string, weekStart: string): Promise<WeekPlan> {
@@ -204,18 +204,38 @@ export async function replaceMeal(mealId: string, recipeId: string, servings: nu
   );
 }
 
-/** Sets who chooses on the given days; null clears them. */
+/** Sets who chooses on the given days of one week; null means nobody, also when it's someone's turn. */
 export async function setDayChoosers(householdId: string, weekStart: string, days: number[], chooserId: string | null) {
   const plan = await ensureWeekPlan(householdId, weekStart);
-  if (chooserId) {
-    check(
-      await supabase
-        .from('week_plan_choosers')
-        .upsert(days.map((day) => ({ week_plan_id: plan.id, day, chooser_id: chooserId }))),
-    );
-  } else {
-    check(await supabase.from('week_plan_choosers').delete().eq('week_plan_id', plan.id).in('day', days));
-  }
+  check(
+    await supabase
+      .from('week_plan_choosers')
+      .upsert(days.map((day) => ({ week_plan_id: plan.id, day, chooser_id: chooserId }))),
+  );
+}
+
+/** The given days of one week follow the rotation again. */
+export async function resetDayChoosers(weekStart: string, days: number[]) {
+  const plan = check(
+    await supabase.from('week_plans').select('id').eq('week_start', weekStart).maybeSingle(),
+  ) as { id: string } | null;
+  if (!plan) return;
+  check(await supabase.from('week_plan_choosers').delete().eq('week_plan_id', plan.id).in('day', days));
+}
+
+/** Who chooses the whole week in turns, starting with whoever chooses the week of `rotationStart`. */
+export async function saveChooserRotation(householdId: string, rotation: string[], rotationStart: string) {
+  check(
+    await supabase
+      .from('households')
+      .update({ chooser_rotation: rotation, rotation_start: rotationStart })
+      .eq('id', householdId),
+  );
+}
+
+/** Weeks start on the shopping day; everything planned moves along and keeps its date. */
+export async function setShoppingDay(_householdId: string, day: number) {
+  check(await supabase.rpc('set_shopping_day', { new_day: day }));
 }
 
 /** Swaps all dishes of two evenings of the same week. */
