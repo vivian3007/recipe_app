@@ -76,6 +76,24 @@ export default function PickRecipe() {
               style={styles.searchInput}
             />
           </View>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/compose-avg',
+                params: mealId
+                  ? { weekStart, day: String(day), mealId, servings: String(servings) }
+                  : { weekStart, day: String(day), servings: String(servings) },
+              })
+            }
+            style={({ pressed }) => [styles.avg, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="restaurant-outline" size={22} color={colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>AVG samenstellen</Text>
+              <Text style={styles.meta}>Aardappels, groente en vlees kiezen, zonder recept</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </Pressable>
           <View style={{ flexDirection: 'row', gap: spacing(2) }}>
             <Chip label="Alles" active={!onlyFavorites} onPress={() => setOnlyFavorites(false)} />
             <Chip label="Mijn favorieten" icon="heart" active={onlyFavorites} onPress={() => setOnlyFavorites(true)} />
@@ -125,6 +143,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(3),
   },
   searchInput: { flex: 1, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
+  avg: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    padding: spacing(3),
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

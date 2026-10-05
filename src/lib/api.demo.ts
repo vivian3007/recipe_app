@@ -7,6 +7,7 @@ import type {
   ChooserOverrides,
   Household,
   Ingredient,
+  OwnAvgOption,
   Profile,
   Recipe,
   RecipeInput,
@@ -15,6 +16,7 @@ import type {
   WeekPlan,
   WeekPlanMeal,
 } from './types';
+import { ownDishRecipe } from './types';
 
 // Demo mode: the same functions as api.remote.ts, but all data is kept on the phone.
 
@@ -191,6 +193,7 @@ function seedStore(): Store {
       // Mum chooses this week, then the demo user, then dad, and so on.
       chooser_rotation: ['demo-mama', DEMO_USER_ID, 'demo-papa'],
       rotation_start: weekStartOf(),
+      avg_options: [],
     },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
@@ -246,6 +249,7 @@ function seedStore(): Store {
       week_plan_id: plan.id,
       day,
       recipe_id: ids[recipeIndex],
+      title: null,
       servings,
       note: null,
       custom_ingredients: null,
@@ -456,6 +460,7 @@ export async function getWeekPlan(
     .map((m) => ({ ...m, created_at: m.created_at ?? '' }))
     .sort((a, b) => a.day - b.day || a.created_at.localeCompare(b.created_at))
     .flatMap((m) => {
+      if (m.recipe_id == null) return [{ ...m, recipe: ownDishRecipe(m) }];
       const recipe = store.recipes.find((r) => r.id === m.recipe_id);
       return recipe ? [{ ...m, recipe: withIngredients(store, recipe) }] : [];
     });
@@ -472,6 +477,7 @@ export async function addMeal(_householdId: string, weekStart: string, day: numb
       week_plan_id: plan.id,
       day,
       recipe_id: recipeId,
+      title: null,
       servings,
       note: null,
       custom_ingredients: null,
@@ -485,7 +491,40 @@ export async function replaceMeal(mealId: string, recipeId: string, servings: nu
   mutate((s) => {
     const meal = s.meals.find((m) => m.id === mealId);
     // A new dish starts without the previous dish's adjustments.
-    if (meal) Object.assign(meal, { recipe_id: recipeId, servings, note: null, custom_ingredients: null });
+    if (meal) Object.assign(meal, { recipe_id: recipeId, title: null, servings, note: null, custom_ingredients: null });
+  });
+}
+
+/** Adds a dish without a recipe, such as an AVG; `ingredients` are for one person. */
+export async function addOwnDish(
+  _householdId: string,
+  weekStart: string,
+  day: number,
+  title: string,
+  ingredients: Ingredient[],
+  servings: number,
+) {
+  mutate((s) => {
+    const plan = ensurePlan(s, weekStart);
+    s.meals.push({
+      id: newId(),
+      week_plan_id: plan.id,
+      day,
+      recipe_id: null,
+      title,
+      servings,
+      note: null,
+      custom_ingredients: ingredients,
+      created_at: new Date().toISOString(),
+    });
+  });
+}
+
+/** Changes an AVG, or puts one in place of a planned dish; `ingredients` are for one person. */
+export async function updateOwnDish(mealId: string, title: string, ingredients: Ingredient[], servings: number) {
+  mutate((s) => {
+    const meal = s.meals.find((m) => m.id === mealId);
+    if (meal) Object.assign(meal, { recipe_id: null, title, custom_ingredients: ingredients, servings, note: null });
   });
 }
 
@@ -509,6 +548,13 @@ export async function resetDayChoosers(weekStart: string, days: number[]) {
 /** Who chooses the whole week in turns, starting with whoever chooses the week of `rotationStart`. */
 export async function saveChooserRotation(_householdId: string, rotation: string[], rotationStart: string) {
   mutate((s) => Object.assign(s.household, { chooser_rotation: rotation, rotation_start: rotationStart }));
+}
+
+/** The family's own AVG choices, next to the standard ones. */
+export async function saveAvgOptions(_householdId: string, options: OwnAvgOption[]) {
+  mutate((s) => {
+    s.household.avg_options = options;
+  });
 }
 
 /** Weeks start on the shopping day; everything planned moves along and keeps its date (as set_shopping_day). */

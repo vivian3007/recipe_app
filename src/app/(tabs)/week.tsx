@@ -15,7 +15,7 @@ import { memberColor, memberLabel, rotationChooser } from '@/lib/members';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
-import type { WeekPlanMeal } from '@/lib/types';
+import { isOwnDish, type WeekPlanMeal } from '@/lib/types';
 import { useWeekPlan } from '@/lib/useWeekPlan';
 
 // A day card grows with the number of dishes on that evening, so the position of every
@@ -393,20 +393,27 @@ export default function Week() {
                     style={styles.mealMain}
                     disabled={draggingDay != null}
                     onPress={() =>
-                      router.push({
-                        pathname: '/recipe/[id]',
-                        params: { id: meal.recipe_id, servings: String(meal.servings), mealId: meal.id, weekStart },
-                      })
+                      meal.recipe_id == null
+                        ? router.push({
+                            pathname: '/compose-avg',
+                            params: { weekStart, day: String(meal.day), mealId: meal.id },
+                          })
+                        : router.push({
+                            pathname: '/recipe/[id]',
+                            params: { id: meal.recipe_id, servings: String(meal.servings), mealId: meal.id, weekStart },
+                          })
                     }
                   >
                     <View style={{ width: 56 }}>
                       <RecipeImage uri={meal.recipe.image_url} height={56} />
                     </View>
                     <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={styles.mealTitle} numberOfLines={meal.note || meal.custom_ingredients ? 1 : 2}>
+                      <Text style={styles.mealTitle} numberOfLines={!isOwnDish(meal) && (meal.note || meal.custom_ingredients) ? 1 : 2}>
                         {meal.recipe.title}
                       </Text>
-                      {meal.note || meal.custom_ingredients ? (
+                      {isOwnDish(meal) ? (
+                        <Text style={styles.mealMeta}>AVG</Text>
+                      ) : meal.note || meal.custom_ingredients ? (
                         <View style={styles.adjusted}>
                           <Ionicons name="create" size={13} color={colors.primaryDark} />
                           <Text style={styles.adjustedText} numberOfLines={1}>
@@ -428,7 +435,13 @@ export default function Week() {
                       icon="create-outline"
                       label="Aanpassen"
                       onPress={() =>
-                        router.push({ pathname: '/adjust-meal', params: { weekStart, mealId: meal.id } })
+                        // An AVG is changed in the same screen it was put together in.
+                        isOwnDish(meal)
+                          ? router.push({
+                              pathname: '/compose-avg',
+                              params: { weekStart, day: String(meal.day), mealId: meal.id },
+                            })
+                          : router.push({ pathname: '/adjust-meal', params: { weekStart, mealId: meal.id } })
                       }
                     />
                     <IconButton icon="refresh" label="Ander" onPress={() => pick(meal.day, meal)} />

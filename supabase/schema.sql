@@ -14,6 +14,8 @@ create table public.households (
   -- Who chooses the whole week, in turns; rotation_start is a week in which the first one chooses.
   chooser_rotation uuid[] not null default '{}',
   rotation_start date,
+  -- The family's own AVG choices: [{ group, label, name, quantity, unit }], amounts for one person.
+  avg_options jsonb not null default '[]',
   created_at timestamptz not null default now()
 );
 
@@ -68,12 +70,19 @@ create table public.week_plan_meals (
   id uuid primary key default gen_random_uuid(),
   week_plan_id uuid not null references public.week_plans (id) on delete cascade,
   day int not null check (day between 0 and 6),
-  recipe_id uuid not null references public.recipes (id) on delete cascade,
+  -- null for a dish without a recipe, such as an AVG (aardappels, groente, vlees).
+  recipe_id uuid references public.recipes (id) on delete cascade,
+  -- Name of a dish without a recipe.
+  title text,
   servings int not null check (servings > 0),
   -- Adjustments for this evening only; the recipe itself stays unchanged.
   note text,
-  custom_ingredients jsonb, -- [{ name, quantity, unit }], null = use the recipe's ingredients
-  created_at timestamptz not null default now()
+  -- [{ name, quantity, unit }], null = use the recipe's ingredients.
+  -- For a dish without a recipe: its ingredients for one person.
+  custom_ingredients jsonb,
+  created_at timestamptz not null default now(),
+  constraint week_plan_meals_recipe_or_own
+    check (recipe_id is not null or (title is not null and custom_ingredients is not null))
 );
 
 -- Who chooses the dish on a day of one week, when that differs from the rotation

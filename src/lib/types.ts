@@ -8,6 +8,17 @@ export type Household = {
   chooser_rotation: string[];
   /** A week in which the first member of the rotation chooses. */
   rotation_start: string | null;
+  /** The family's own AVG choices, next to the standard ones. */
+  avg_options: OwnAvgOption[];
+};
+
+/** An AVG choice the family added themselves; the amount is for one person. */
+export type OwnAvgOption = {
+  group: 'a' | 'g' | 'v' | 'x';
+  label: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
 };
 
 export type Profile = {
@@ -64,16 +75,51 @@ export type WeekPlanMeal = {
   id: string;
   week_plan_id: string;
   day: number;
-  recipe_id: string;
+  /** null for a dish without a recipe, such as an AVG. */
+  recipe_id: string | null;
+  /** Name of a dish without a recipe. */
+  title: string | null;
   servings: number;
   /** Note for this evening, e.g. "met kip i.p.v. gehakt". */
   note: string | null;
-  /** Ingredients adjusted for this evening only; null means the recipe's own ingredients. */
+  /**
+   * Ingredients adjusted for this evening only; null means the recipe's own ingredients.
+   * For a dish without a recipe: its ingredients for one person.
+   */
   custom_ingredients: Ingredient[] | null;
   /** Dishes on the same evening are shown in the order they were added. */
   created_at: string;
+  /** For a dish without a recipe, a stand-in recipe for one person (see ownDishRecipe). */
   recipe: RecipeWithIngredients;
 };
+
+/** A dish without a recipe, such as an AVG (aardappels, groente, vlees). */
+export function isOwnDish(meal: Pick<WeekPlanMeal, 'recipe_id'>): boolean {
+  return meal.recipe_id == null;
+}
+
+/**
+ * Lets the rest of the app treat a dish without a recipe like any other: a recipe for one
+ * person with the dish's own name and ingredients, so the shopping list scales it as usual.
+ */
+export function ownDishRecipe(meal: Pick<WeekPlanMeal, 'id' | 'title' | 'custom_ingredients' | 'created_at'>): RecipeWithIngredients {
+  return {
+    id: meal.id,
+    household_id: '',
+    created_by: null,
+    title: meal.title ?? 'AVG',
+    description: null,
+    image_url: null,
+    servings: 1,
+    prep_minutes: null,
+    instructions: null,
+    source_url: null,
+    tags: [],
+    created_at: meal.created_at,
+    author: null,
+    recipe_ingredients: meal.custom_ingredients ?? [],
+  };
+}
 
 /** Something added to the shopping list by hand, e.g. "melk" or "2 pakken koffie". */
 export type ShoppingExtra = {

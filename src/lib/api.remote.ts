@@ -6,6 +6,7 @@ import { replaceTags } from './tags';
 import type {
   ChooserOverrides,
   Ingredient,
+  OwnAvgOption,
   Recipe,
   RecipeInput,
   RecipeWithIngredients,
@@ -13,6 +14,7 @@ import type {
   WeekPlan,
   WeekPlanMeal,
 } from './types';
+import { ownDishRecipe } from './types';
 
 const RECIPE_FIELDS =
   'id, household_id, created_by, title, description, image_url, servings, prep_minutes, instructions, source_url, tags, created_at, author:profiles!recipes_created_by_fkey(display_name)';
@@ -161,14 +163,17 @@ export async function getWeekPlan(
     supabase
       .from('week_plan_meals')
       .select(
-        `id, week_plan_id, day, recipe_id, servings, note, custom_ingredients, created_at, recipe:recipes(${RECIPE_FIELDS}, ${INGREDIENT_FIELDS})`,
+        `id, week_plan_id, day, recipe_id, title, servings, note, custom_ingredients, created_at, recipe:recipes(${RECIPE_FIELDS}, ${INGREDIENT_FIELDS})`,
       )
       .eq('week_plan_id', plan.id)
       .order('day')
       .order('created_at'),
     supabase.from('week_plan_choosers').select('day, chooser_id').eq('week_plan_id', plan.id),
   ]);
-  const meals = (check(mealsResult) as unknown as WeekPlanMeal[]).filter((m) => m.recipe);
+  const meals = (check(mealsResult) as unknown as WeekPlanMeal[])
+    // A dish without a recipe (an AVG) gets a stand-in recipe; a deleted recipe takes its dishes with it.
+    .map((m) => (m.recipe_id == null ? { ...m, recipe: ownDishRecipe(m) } : m))
+    .filter((m) => m.recipe);
   meals.forEach((m) => sortIngredients(m.recipe));
   for (const row of check(choosersResult) ?? []) chooserOverrides[row.day as number] = row.chooser_id as string | null;
   return { plan, meals, chooserOverrides };
@@ -199,7 +204,34 @@ export async function replaceMeal(mealId: string, recipeId: string, servings: nu
     await supabase
       .from('week_plan_meals')
       // A new dish starts without the previous dish's adjustments.
-      .update({ recipe_id: recipeId, servings, note: null, custom_ingredients: null })
+      .update({ recipe_id: recipeId, title: null, servings, note: null, custom_ingredients: null })
+      .eq('id', mealId),
+  );
+}
+
+/** Adds a dish without a recipe, such as an AVG; `ingredients` are for one person. */
+export async function addOwnDish(
+  householdId: string,
+  weekStart: string,
+  day: number,
+  title: string,
+  ingredients: Ingredient[],
+  servings: number,
+) {
+  const plan = await ensureWeekPlan(householdId, weekStart);
+  check(
+    await supabase
+      .from('week_plan_meals')
+      .insert({ week_plan_id: plan.id, day, recipe_id: null, title, custom_ingredients: ingredients, servings }),
+  );
+}
+
+/** Changes an AVG, or puts one in place of a planned dish; `ingredients` are for one person. */
+export async function updateOwnDish(mealId: string, title: string, ingredients: Ingredient[], servings: number) {
+  check(
+    await supabase
+      .from('week_plan_meals')
+      .update({ recipe_id: null, title, custom_ingredients: ingredients, servings, note: null })
       .eq('id', mealId),
   );
 }
@@ -231,6 +263,11 @@ export async function saveChooserRotation(householdId: string, rotation: string[
       .update({ chooser_rotation: rotation, rotation_start: rotationStart })
       .eq('id', householdId),
   );
+}
+
+/** The family's own AVG choices, next to the standard ones. */
+export async function saveAvgOptions(householdId: string, options: OwnAvgOption[]) {
+  check(await supabase.from('households').update({ avg_options: options }).eq('id', householdId));
 }
 
 /** Weeks start on the shopping day; everything planned moves along and keeps its date. */
