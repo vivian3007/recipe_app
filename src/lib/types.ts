@@ -16,6 +16,8 @@ export type Household = {
   remind_hour: number;
   /** Who does the shopping: they get a notification when the coming week is ready. */
   shopper_ids: string[];
+  /** Products the family moved to another supermarket aisle: { "name in lower case": aisle key }. */
+  aisle_overrides: Record<string, string>;
 };
 
 /**

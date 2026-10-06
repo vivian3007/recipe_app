@@ -272,6 +272,11 @@ export async function listAvgDishes(): Promise<Ingredient[][]> {
   return (rows ?? []).map((r) => (r.custom_ingredients as Ingredient[] | null) ?? []);
 }
 
+/** Products the family moved to another supermarket aisle. */
+export async function saveAisleOverrides(householdId: string, overrides: Record<string, string>) {
+  check(await supabase.from('households').update({ aisle_overrides: overrides }).eq('id', householdId));
+}
+
 /** When reminders go out, and who does the shopping. */
 export async function saveNotificationSettings(householdId: string, settings: Partial<NotificationSettings>) {
   check(await supabase.from('households').update(settings).eq('id', householdId));

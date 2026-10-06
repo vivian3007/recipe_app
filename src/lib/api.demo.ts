@@ -198,6 +198,7 @@ function seedStore(): Store {
       remind_days_before: 2,
       remind_hour: 9,
       shopper_ids: ['demo-mama'],
+      aisle_overrides: {},
     },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
@@ -559,6 +560,13 @@ export async function listAvgDishes(): Promise<Ingredient[][]> {
   return load()
     .meals.filter((m) => m.recipe_id == null)
     .map((m) => m.custom_ingredients ?? []);
+}
+
+/** Products the family moved to another supermarket aisle. */
+export async function saveAisleOverrides(_householdId: string, overrides: Record<string, string>) {
+  mutate((s) => {
+    s.household.aisle_overrides = overrides;
+  });
 }
 
 /** When reminders go out, and who does the shopping. */

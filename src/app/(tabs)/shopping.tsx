@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Animated,
   LayoutAnimation,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -18,14 +19,17 @@ import {
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, EmptyState, Loading } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
+import { AISLES, aisleOf, type AisleKey } from '@/lib/aisles';
 import {
   addShoppingExtra,
   listShoppingChecks,
   listShoppingExtras,
   removeShoppingExtra,
+  saveAisleOverrides,
   setShoppingCheck,
 } from '@/lib/api';
 import { dayShort, weekLabel } from '@/lib/dates';
+import { notify } from '@/lib/dialogs';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
 import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -36,7 +40,12 @@ import { useWeekPlan } from '@/lib/useWeekPlan';
 export default function Shopping() {
   useWeekFromLink();
   const weekStart = useSelectedWeek();
-  const { profile, household } = useSession();
+  const { profile, household, refresh } = useSession();
+  // Moved products show up in their new aisle straight away, also while saving.
+  const [aisleDraft, setAisleDraft] = useState<Record<string, string> | null>(null);
+  const overrides = aisleDraft ?? household?.aisle_overrides ?? {};
+  // The product whose aisle is being chosen.
+  const [moving, setMoving] = useState<ShoppingItem | null>(null);
   const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ShoppingExtra[]>([]);
@@ -74,6 +83,27 @@ export default function Shopping() {
   );
   const open = items.filter((i) => !checked.has(i.key));
   const done = items.filter((i) => checked.has(i.key));
+  // What's still to get, per aisle in the order you walk through the shop.
+  const aisles = AISLES.map((a) => ({ aisle: a, items: open.filter((i) => aisleOf(i.name, overrides) === a.key) })).filter(
+    (group) => group.items.length > 0,
+  );
+
+  /** Puts a product in another aisle, for the whole family and every week. */
+  async function moveTo(item: ShoppingItem, key: AisleKey) {
+    setMoving(null);
+    if (!household) return;
+    const next = { ...overrides, [item.name.trim().toLowerCase()]: key };
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setAisleDraft(next);
+    try {
+      await saveAisleOverrides(household.id, next);
+      await refresh();
+    } catch (e) {
+      notify('Verplaatsen mislukt', (e as Error).message);
+    } finally {
+      setAisleDraft(null);
+    }
+  }
 
   async function toggle(item: ShoppingItem) {
     if (!plan) return;
@@ -122,8 +152,11 @@ export default function Shopping() {
   }
 
   function share() {
-    const lines = open.map((i) => `• ${[formatAmount(i.quantity, i.unit), i.name].filter(Boolean).join(' ')}`);
-    Share.share({ message: `Boodschappen – ${weekLabel(weekStart).toLowerCase()}\n\n${lines.join('\n')}` });
+    const sections = aisles.map(
+      ({ aisle: a, items: list }) =>
+        `*${a.label}*\n${list.map((i) => `• ${[formatAmount(i.quantity, i.unit), i.name].filter(Boolean).join(' ')}`).join('\n')}`,
+    );
+    Share.share({ message: `Boodschappen – ${weekLabel(weekStart).toLowerCase()}\n\n${sections.join('\n\n')}` });
   }
 
   async function onRefresh() {
@@ -213,19 +246,26 @@ export default function Shopping() {
               </Pressable>
             </View>
 
-            {open.length > 0 && (
-              <View style={styles.list}>
-                {open.map((item) => (
-                  <Row
-                    key={item.key}
-                    item={item}
-                    checked={false}
-                    onPress={() => toggle(item)}
-                    onRemove={item.extraId ? () => removeExtra(item) : undefined}
-                  />
-                ))}
+            {aisles.map(({ aisle: a, items: list }) => (
+              <View key={a.key} style={{ gap: spacing(2) }}>
+                <View style={styles.aisleHeader}>
+                  <Ionicons name={a.icon} size={16} color={colors.accent} />
+                  <Text style={styles.aisleTitle}>{a.label}</Text>
+                </View>
+                <View style={styles.list}>
+                  {list.map((item) => (
+                    <Row
+                      key={item.key}
+                      item={item}
+                      checked={false}
+                      onPress={() => toggle(item)}
+                      onMove={() => setMoving(item)}
+                      onRemove={item.extraId ? () => removeExtra(item) : undefined}
+                    />
+                  ))}
+                </View>
               </View>
-            )}
+            ))}
 
             {done.length > 0 && (
               <>
@@ -246,6 +286,31 @@ export default function Shopping() {
           </>
         )}
       </ScrollView>
+
+      <Modal visible={!!moving} transparent animationType="fade" onRequestClose={() => setMoving(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setMoving(null)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>In welk gangpad ligt {moving?.name}?</Text>
+            <Text style={styles.sheetHint}>De app onthoudt het voor het hele gezin.</Text>
+            <ScrollView style={{ maxHeight: 420 }}>
+              {AISLES.map((a) => {
+                const current = moving ? aisleOf(moving.name, overrides) === a.key : false;
+                return (
+                  <Pressable
+                    key={a.key}
+                    onPress={() => moving && moveTo(moving, a.key)}
+                    style={({ pressed }) => [styles.sheetRow, current && styles.sheetRowActive, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name={a.icon} size={18} color={current ? colors.accent : colors.textMuted} />
+                    <Text style={[styles.sheetLabel, current && { fontWeight: '700' }]}>{a.label}</Text>
+                    {current && <Ionicons name="checkmark" size={18} color={colors.accent} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardScreen>
   );
 }
@@ -260,11 +325,14 @@ function Row({
   item,
   checked,
   onPress,
+  onMove,
   onRemove,
 }: {
   item: ShoppingItem;
   checked: boolean;
   onPress: () => void;
+  /** Choose another aisle for the product. */
+  onMove?: () => void;
   /** Only for things added by hand; recipe ingredients come and go with the week plan. */
   onRemove?: () => void;
 }) {
@@ -322,6 +390,11 @@ function Row({
             {item.extraId ? 'Zelf toegevoegd' : item.recipes.join(', ')}
           </Text>
         </View>
+        {onMove && (
+          <Pressable onPress={onMove} hitSlop={10} accessibilityLabel={`${item.name} in een ander gangpad zetten`}>
+            <Ionicons name="swap-vertical-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+        )}
         {onRemove && (
           <Pressable onPress={onRemove} hitSlop={10} accessibilityLabel={`${item.name} van het lijstje halen`}>
             <Ionicons name="close" size={20} color={colors.textMuted} />
@@ -334,6 +407,30 @@ function Row({
 
 const styles = StyleSheet.create({
   container: { padding: spacing(4), gap: spacing(3), paddingBottom: spacing(10) },
+  aisleHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) },
+  aisleTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, textTransform: 'uppercase', letterSpacing: 0.5 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: spacing(5) },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing(4),
+    gap: spacing(2),
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  sheetHint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing(1) },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    paddingVertical: spacing(3),
+    paddingHorizontal: spacing(2),
+    borderRadius: radius.md,
+  },
+  sheetRowActive: { backgroundColor: colors.accentSoft },
+  sheetLabel: { flex: 1, fontSize: 15, color: colors.text },
   mealsBox: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: spacing(4), gap: spacing(1) },
   mealLine: { fontSize: 14, color: colors.text },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(1), marginLeft: spacing(9), marginTop: 2 },

@@ -16,6 +16,8 @@ create table public.households (
   rotation_start date,
   -- The family's own AVG choices: [{ group, label, name, quantity, unit }], amounts for one person.
   avg_options jsonb not null default '[]',
+  -- Products moved to another supermarket aisle: { "name in lower case": "aisle key" }.
+  aisle_overrides jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
 
