@@ -80,6 +80,18 @@ Open de link in **Safari**, tik op **Deel → Zet op beginscherm**. Weekmenu kri
 - Web/iPhone: opnieuw `npx expo export --platform web` en `npx eas-cli@latest deploy --prod`; bij de volgende keer openen is iedereen bij.
 - Een nieuwe APK is alleen nodig als er nieuwe native onderdelen bij komen (bijvoorbeeld een nieuwe Expo-module). De app krijgt dan geen update die niet bij zijn versie past.
 
+## 4. Pushmeldingen (gratis)
+
+Wie de komende week kiest, krijgt een herinnering (standaard 2 dagen voor de boodschappendag om 9:00, daarna elke dag tot de week klaar is). Wie de boodschappen doet, krijgt een melding zodra iemand op **Week is klaar** tikt. Iedereen zet meldingen voor zijn eigen toestel aan bij **Gezin → Meldingen**; op een iPhone kan dat alleen als Weekmenu op het beginscherm staat.
+
+Eenmalig instellen:
+
+1. Voer [`supabase/notifications.sql`](supabase/notifications.sql) uit in de SQL Editor (zet ook de controle op die elk uur draait).
+2. Maak een toegangssleutel op [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) en zet hem in `.env.local` als `SUPABASE_ACCESS_TOKEN=sbp_...`.
+3. Web Push (iPhone): `npx web-push generate-vapid-keys`; zet de public key in `.env.local` als `EXPO_PUBLIC_VAPID_PUBLIC_KEY` en beide sleutels in Supabase: `npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... --project-ref <project>`.
+4. De functie online zetten: `npx supabase functions deploy notify --no-verify-jwt --project-ref <project>`.
+5. Android: maak een Firebase-project met een Android-app `nl.vlaanderen.weekmenu`, zet `google-services.json` in de projectmap en upload de serviceaccount-sleutel (Projectinstellingen → Serviceaccounts) op expo.dev bij Credentials → Android → FCM V1. Bouw daarna een nieuwe APK.
+
 ## Hoe gebruik je het?
 
 1. Eén persoon maakt een account en kiest **Nieuw gezin starten**.
