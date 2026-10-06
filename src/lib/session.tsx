@@ -28,6 +28,9 @@ function withSettings(h: Partial<Household> & Pick<Household, 'id' | 'name' | 'i
     chooser_rotation: h.chooser_rotation ?? [],
     rotation_start: h.rotation_start ?? null,
     avg_options: h.avg_options ?? [],
+    remind_days_before: h.remind_days_before ?? 2,
+    remind_hour: h.remind_hour ?? 9,
+    shopper_ids: h.shopper_ids ?? [],
   };
   // Weeks start on the shopping day; set before any screen sees the household.
   applyShoppingDay(household.shopping_day);

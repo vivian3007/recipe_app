@@ -1,13 +1,21 @@
 import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
 import { Loading } from '@/components/ui';
+import { refreshPush, useOpenFromNotification } from '@/lib/push';
 import { SessionProvider, useSession } from '@/lib/session';
+import { isDemo } from '@/lib/supabase';
 import { useAppUpdates } from '@/lib/useAppUpdates';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
-  const { loading, signedIn, household } = useSession();
+  const { loading, signedIn, household, profile } = useSession();
+  useOpenFromNotification();
+  // Keeps this device's notification address with whoever is logged in.
+  useEffect(() => {
+    if (profile && !isDemo) refreshPush(profile.id).catch(() => {});
+  }, [profile]);
   if (loading) return <Loading />;
 
   const hasHousehold = !!household;

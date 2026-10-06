@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { NotificationSettings } from '@/components/NotificationSettings';
 import { RotationPlanner } from '@/components/RotationPlanner';
 import { Button, Card, Field } from '@/components/ui';
 import { saveChooserRotation, setShoppingDay, updateDisplayName } from '@/lib/api';
@@ -178,6 +179,8 @@ export default function ProfileScreen() {
           onChange={changeRotation}
           onDragging={setDragging}
         />
+
+        <NotificationSettings />
 
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Mijn account</Text>

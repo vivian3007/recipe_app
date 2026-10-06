@@ -6,6 +6,7 @@ import { replaceTags } from './tags';
 import type {
   ChooserOverrides,
   Ingredient,
+  NotificationSettings,
   OwnAvgOption,
   Recipe,
   RecipeInput,
@@ -153,7 +154,7 @@ export async function getWeekPlan(
   const plan = check(
     await supabase
       .from('week_plans')
-      .select('id, household_id, week_start')
+      .select('id, household_id, week_start, ready_at, ready_by')
       .eq('week_start', weekStart)
       .maybeSingle(),
   ) as WeekPlan | null;
@@ -269,6 +270,35 @@ export async function saveChooserRotation(householdId: string, rotation: string[
 export async function listAvgDishes(): Promise<Ingredient[][]> {
   const rows = check(await supabase.from('week_plan_meals').select('custom_ingredients').is('recipe_id', null));
   return (rows ?? []).map((r) => (r.custom_ingredients as Ingredient[] | null) ?? []);
+}
+
+/** When reminders go out, and who does the shopping. */
+export async function saveNotificationSettings(householdId: string, settings: Partial<NotificationSettings>) {
+  check(await supabase.from('households').update(settings).eq('id', householdId));
+}
+
+/** Marks the week as ready and tells the shoppers (the notify function). */
+export async function markWeekReady(_householdId: string, weekStart: string): Promise<{ notified: number; shoppers: number }> {
+  const { data, error } = await supabase.functions.invoke('notify', { body: { type: 'ready', weekStart } });
+  if (error) {
+    const message = await (error as { context?: Response }).context
+      ?.json()
+      .then((b: { error?: string }) => b.error)
+      .catch(() => null);
+    throw new Error(message ?? error.message);
+  }
+  return data as { notified: number; shoppers: number };
+}
+
+/** The week isn't ready after all: whoever chooses gets reminders again. */
+export async function unmarkWeekReady(householdId: string, weekStart: string) {
+  check(
+    await supabase
+      .from('week_plans')
+      .update({ ready_at: null, ready_by: null })
+      .eq('household_id', householdId)
+      .eq('week_start', weekStart),
+  );
 }
 
 /** The family's own AVG choices, next to the standard ones. */

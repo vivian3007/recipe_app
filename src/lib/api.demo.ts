@@ -7,6 +7,7 @@ import type {
   ChooserOverrides,
   Household,
   Ingredient,
+  NotificationSettings,
   OwnAvgOption,
   Profile,
   Recipe,
@@ -194,6 +195,9 @@ function seedStore(): Store {
       chooser_rotation: ['demo-mama', DEMO_USER_ID, 'demo-papa'],
       rotation_start: weekStartOf(),
       avg_options: [],
+      remind_days_before: 2,
+      remind_hour: 9,
+      shopper_ids: ['demo-mama'],
     },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
@@ -555,6 +559,30 @@ export async function listAvgDishes(): Promise<Ingredient[][]> {
   return load()
     .meals.filter((m) => m.recipe_id == null)
     .map((m) => m.custom_ingredients ?? []);
+}
+
+/** When reminders go out, and who does the shopping. */
+export async function saveNotificationSettings(_householdId: string, settings: Partial<NotificationSettings>) {
+  mutate((s) => {
+    Object.assign(s.household, settings);
+  });
+}
+
+/** Marks the week as ready; the demo has no notifications to send. */
+export async function markWeekReady(_householdId: string, weekStart: string): Promise<{ notified: number; shoppers: number }> {
+  let shoppers = 0;
+  mutate((s) => {
+    Object.assign(ensurePlan(s, weekStart), { ready_at: new Date().toISOString(), ready_by: DEMO_USER_ID });
+    shoppers = (s.household.shopper_ids ?? []).filter((id) => id !== DEMO_USER_ID).length;
+  });
+  return { notified: 0, shoppers };
+}
+
+export async function unmarkWeekReady(_householdId: string, weekStart: string) {
+  mutate((s) => {
+    const plan = findPlan(s, weekStart);
+    if (plan) Object.assign(plan, { ready_at: null, ready_by: null });
+  });
 }
 
 /** The family's own AVG choices, next to the standard ones. */

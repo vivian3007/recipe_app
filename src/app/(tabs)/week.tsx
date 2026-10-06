@@ -7,12 +7,13 @@ import { ChooserPlanner } from '@/components/ChooserPlanner';
 import { DragHandle } from '@/components/DragHandle';
 import { RecipeImage } from '@/components/RecipeCard';
 import { Loading, Stepper } from '@/components/ui';
+import { WeekReady } from '@/components/WeekReady';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { removeMeal, resetDayChoosers, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
 import { dateOfDay, dayName, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
 import { memberColor, memberLabel, rotationChooser } from '@/lib/members';
-import { useSelectedWeek } from '@/lib/selectedWeek';
+import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { isOwnDish, type WeekPlanMeal } from '@/lib/types';
@@ -66,6 +67,7 @@ const EDGE = 80; // distance from the top/bottom edge where dragging scrolls the
 const useNativeDriver = false;
 
 export default function Week() {
+  useWeekFromLink();
   const weekStart = useSelectedWeek();
   const { household, members, profile } = useSession();
   const { plan, meals, setMeals, chooserOverrides, setChooserOverrides, loading, error, reload } =
@@ -452,6 +454,8 @@ export default function Week() {
             );
           })}
         </View>
+
+        <WeekReady weekStart={weekStart} plan={plan} hasMeals={meals.length > 0} onChange={reload} />
       </ScrollView>
     </View>
   );

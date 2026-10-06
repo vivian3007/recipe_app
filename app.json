@@ -44,7 +44,14 @@
           "photosPermission": "Weekmenu wil je foto’s gebruiken om een foto bij een recept te zetten."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#E8613C",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "scheme": "weekmenu",
     "experiments": {

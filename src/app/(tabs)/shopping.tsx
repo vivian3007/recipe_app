@@ -27,13 +27,14 @@ import {
 } from '@/lib/api';
 import { dayShort, weekLabel } from '@/lib/dates';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
-import { useSelectedWeek } from '@/lib/selectedWeek';
+import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { ShoppingExtra } from '@/lib/types';
 import { useWeekPlan } from '@/lib/useWeekPlan';
 
 export default function Shopping() {
+  useWeekFromLink();
   const weekStart = useSelectedWeek();
   const { profile, household } = useSession();
   const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);

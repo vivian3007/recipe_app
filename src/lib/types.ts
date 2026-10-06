@@ -10,6 +10,12 @@ export type Household = {
   rotation_start: string | null;
   /** The family's own AVG choices, next to the standard ones. */
   avg_options: OwnAvgOption[];
+  /** The first reminder for whoever chooses: this many days before the shopping day... */
+  remind_days_before: number;
+  /** ...at this hour (Dutch time), and then every day at that hour until the week is ready. */
+  remind_hour: number;
+  /** Who does the shopping: they get a notification when the coming week is ready. */
+  shopper_ids: string[];
 };
 
 /**
@@ -64,7 +70,13 @@ export type WeekPlan = {
   id: string;
   household_id: string;
   week_start: string;
+  /** When whoever chose marked the week as ready; null (or missing) while it isn't. */
+  ready_at?: string | null;
+  ready_by?: string | null;
 };
+
+/** The family's notification settings (see Household). */
+export type NotificationSettings = Pick<Household, 'remind_days_before' | 'remind_hour' | 'shopper_ids'>;
 
 /** Who chooses the dish per day of the week (0 = the shopping day); null when nobody does. */
 export type DayChoosers = (string | null)[];

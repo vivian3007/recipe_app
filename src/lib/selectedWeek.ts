@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useSyncExternalStore } from 'react';
 
 import { dateOfDay, getShoppingDay, setShoppingDay, weekStartOf } from './dates';
 
@@ -20,6 +21,14 @@ export function useSelectedWeek(): string {
     },
     () => current,
   );
+}
+
+/** A notification links to a week (?week=YYYY-MM-DD): show that week. */
+export function useWeekFromLink() {
+  const { week } = useLocalSearchParams<{ week?: string }>();
+  useEffect(() => {
+    if (week && /^\d{4}-\d{2}-\d{2}$/.test(week)) setSelectedWeek(week);
+  }, [week]);
 }
 
 /** Weeks start on the household's shopping day; when it changes, the selected week follows. */
