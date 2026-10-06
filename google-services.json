@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "698194902277",
+    "project_id": "weekmenu-806d1",
+    "storage_bucket": "weekmenu-806d1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:698194902277:android:7fc3adf9f19d59c1098b6c",
+        "android_client_info": {
+          "package_name": "nl.vlaanderen.weekmenu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr0HXTnpmXQ6LvSkRHZOUYLN9MsGznLLQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
