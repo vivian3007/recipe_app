@@ -5,6 +5,7 @@ import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 
 import { ChooserPlanner } from '@/components/ChooserPlanner';
 import { DragHandle } from '@/components/DragHandle';
+import { EnablePushBanner } from '@/components/EnablePushBanner';
 import { RecipeImage } from '@/components/RecipeCard';
 import { Loading, Stepper } from '@/components/ui';
 import { WeekReady } from '@/components/WeekReady';
@@ -299,6 +300,7 @@ export default function Week() {
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        <EnablePushBanner />
         <WeekSwitcher weekStart={weekStart} />
         <ChooserPlanner
           weekStart={weekStart}
