@@ -100,21 +100,9 @@ export function Stepper({
   );
 }
 
-export function Chip({
-  label,
-  active,
-  onPress,
-  onLongPress,
-  icon,
-}: {
-  label: string;
-  active?: boolean;
-  onPress?: () => void;
-  onLongPress?: () => void;
-  icon?: IconName;
-}) {
+export function Chip({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: IconName }) {
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} style={[styles.chip, active && styles.chipActive]}>
+    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
       {icon && <Ionicons name={icon} size={14} color={active ? '#fff' : colors.text} />}
       <Text style={[styles.chipText, active && { color: '#fff' }]}>{label}</Text>
     </Pressable>

@@ -265,6 +265,12 @@ export async function saveChooserRotation(householdId: string, rotation: string[
   );
 }
 
+/** The ingredients of every AVG the family planned, to put the most used choices first. */
+export async function listAvgDishes(): Promise<Ingredient[][]> {
+  const rows = check(await supabase.from('week_plan_meals').select('custom_ingredients').is('recipe_id', null));
+  return (rows ?? []).map((r) => (r.custom_ingredients as Ingredient[] | null) ?? []);
+}
+
 /** The family's own AVG choices, next to the standard ones. */
 export async function saveAvgOptions(householdId: string, options: OwnAvgOption[]) {
   check(await supabase.from('households').update({ avg_options: options }).eq('id', householdId));

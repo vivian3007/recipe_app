@@ -12,13 +12,17 @@ export type Household = {
   avg_options: OwnAvgOption[];
 };
 
-/** An AVG choice the family added themselves; the amount is for one person. */
+/**
+ * An AVG choice the family added themselves (the amount is for one person), or with `hidden`
+ * a standard choice the family took off the list.
+ */
 export type OwnAvgOption = {
   group: 'a' | 'g' | 'v' | 'x';
   label: string;
   name: string;
   quantity: number | null;
   unit: string | null;
+  hidden?: boolean;
 };
 
 export type Profile = {

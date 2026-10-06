@@ -550,6 +550,13 @@ export async function saveChooserRotation(_householdId: string, rotation: string
   mutate((s) => Object.assign(s.household, { chooser_rotation: rotation, rotation_start: rotationStart }));
 }
 
+/** The ingredients of every AVG the family planned, to put the most used choices first. */
+export async function listAvgDishes(): Promise<Ingredient[][]> {
+  return load()
+    .meals.filter((m) => m.recipe_id == null)
+    .map((m) => m.custom_ingredients ?? []);
+}
+
 /** The family's own AVG choices, next to the standard ones. */
 export async function saveAvgOptions(_householdId: string, options: OwnAvgOption[]) {
   mutate((s) => {

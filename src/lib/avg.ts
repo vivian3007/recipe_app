@@ -91,17 +91,41 @@ export const AVG_GROUPS: AvgGroup[] = [
   },
 ];
 
-/** The standard choices with the family's own added to their group. */
-export function avgGroups(own: OwnAvgOption[]): AvgGroup[] {
+/**
+ * The choices per group: the standard ones the family didn't hide plus their own, the most
+ * used first (`usage`: how often each ingredient was in a planned AVG).
+ */
+export function avgGroups(own: OwnAvgOption[], usage: Record<string, number> = {}): AvgGroup[] {
+  const hidden = new Set(own.filter((o) => o.hidden).map((o) => `${o.group}:${o.label}`));
+  const used = (option: AvgOption) => usage[option.ingredients[0].name] ?? 0;
   return AVG_GROUPS.map((group) => ({
     ...group,
     options: [
-      ...group.options,
+      ...group.options.filter((o) => !hidden.has(`${group.key}:${o.label}`)),
       ...own
-        .filter((o) => o.group === group.key)
+        .filter((o) => o.group === group.key && !o.hidden)
         .map((o) => ({ label: o.label, ingredients: [{ name: o.name, quantity: o.quantity, unit: o.unit }] })),
-    ],
+    ]
+      // Stable: equally used choices keep their usual order.
+      .map((option, index) => ({ option, index }))
+      .sort((a, b) => used(b.option) - used(a.option) || a.index - b.index)
+      .map(({ option }) => option),
   }));
+}
+
+/** Standard choices the family hid, per group, so they can be put back. */
+export function hiddenAvgOptions(own: OwnAvgOption[], group: AvgGroup['key']): AvgOption[] {
+  const hidden = new Set(own.filter((o) => o.hidden && o.group === group).map((o) => o.label));
+  return AVG_GROUPS.find((g) => g.key === group)!.options.filter((o) => hidden.has(o.label));
+}
+
+/** How often each ingredient was in a planned AVG. */
+export function countAvgUsage(dishes: Ingredient[][]): Record<string, number> {
+  const usage: Record<string, number> = {};
+  for (const ingredients of dishes) {
+    for (const ing of ingredients) usage[ing.name] = (usage[ing.name] ?? 0) + 1;
+  }
+  return usage;
 }
 
 /** The option whose ingredient has this name, to recognise a saved AVG. */

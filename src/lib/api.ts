@@ -21,6 +21,7 @@ export const {
   addOwnDish,
   updateOwnDish,
   saveAvgOptions,
+  listAvgDishes,
   setDayChoosers,
   resetDayChoosers,
   saveChooserRotation,
