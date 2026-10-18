@@ -23,9 +23,12 @@ export type AisleKey =
 
 export type Aisle = { key: AisleKey; label: string; icon: IconName; words: string[] };
 
-// Words are matched anywhere in the name ("rundergehakt" has "gehakt"); when several match, the
-// longest wins, so "kokosmelk" goes to wereld rather than zuivel. A word starting with ^ only
-// matches at the start of a word, for short words like "ui" (not in "fruit" or "kruiden").
+// Words are matched anywhere in the name ("rundergehakt" has "gehakt"), ignoring accents and
+// anything in brackets or after a comma ("kipfilet (in stukjes)"). A match inside a longer one
+// doesn't count ("kokosmelk" is not melk). Of the rest the last one wins, because in Dutch the
+// product comes last: "tomatensoep" is soup, "witte wijnazijn" is vinegar. A word starting with ^
+// only matches at the start of a word, for short words like "ui" (not in "fruit" or "kruiden").
+// Brands that sit in one aisle win from any word (BRANDS).
 export const AISLES: Aisle[] = [
   {
     key: 'groente',
@@ -40,6 +43,7 @@ export const AISLES: Aisle[] = [
       'mango', 'ananas', 'kiwi', 'meloen', 'gember', 'verse', 'peterselie', 'basilicum', 'koriander', 'bieslook',
       'dille', 'munt', 'lente-ui', 'bosui', 'selderij', 'venkel', 'radijs', 'biet', 'pompoen', 'taugé', 'asperge',
       'maiskolf', 'groente', 'fruit', 'salade', 'doperwten', 'erwten', 'boerenkool', 'zuurkool', 'zoete aardappel',
+      'penen', 'perzik', 'nectarine', 'pruimen', 'bleekselderij', 'koolmix',
     ],
   },
   {
@@ -48,7 +52,7 @@ export const AISLES: Aisle[] = [
     icon: 'basket-outline',
     words: [
       'brood', 'stokbrood', 'bolletjes', 'broodjes', 'croissant', 'pistolet', 'naan', 'pita', 'ciabatta', 'focaccia',
-      'hamburgerbroodjes', 'krentenbol', 'afbakbrood',
+      'hamburgerbroodjes', 'krentenbol', 'afbakbrood', 'boterham', 'flatbread', 'tijgerbrood',
     ],
   },
   {
@@ -71,7 +75,7 @@ export const AISLES: Aisle[] = [
     words: [
       'kaas', 'geraspte kaas', 'parmezaan', 'parmigiano', 'mozzarella', 'feta', 'geitenkaas', 'cheddar', 'gouda',
       'brie', 'ricotta', '^ham', 'salami', 'chorizo', 'rookvlees', 'filet americain', 'carpaccio', 'hummus',
-      'olijven', 'tapenade', 'smeerkaas', 'roomkaas',
+      'olijven', 'tapenade', 'smeerkaas', 'roomkaas', 'vleeswaren', 'achterham', 'beenham', 'kipfilet vleeswaren',
     ],
   },
   {
@@ -81,7 +85,7 @@ export const AISLES: Aisle[] = [
     words: [
       'melk', 'karnemelk', 'yoghurt', 'kwark', '^vla', 'room', 'slagroom', 'kookroom', 'kookzuivel', 'crème fraîche',
       'creme fraiche', 'zure room', 'boter', 'roomboter', 'margarine', '^ei', 'eieren', 'mascarpone', 'toetje',
-      'skyr', 'zuivel',
+      'skyr', 'zuivel', 'sour cream',
     ],
   },
   {
@@ -93,7 +97,8 @@ export const AISLES: Aisle[] = [
       '^mie', 'rijst', 'basmati', 'couscous', 'bulgur', 'quinoa', 'tortilla', 'wrap', 'taco', 'nacho', 'kokosmelk',
       'sojasaus', 'ketjap', 'sambal', 'currypasta', 'curry', 'sweet chili', 'oestersaus', 'vissaus', 'pesto',
       'gnocchi', 'risotto', 'wokolie', 'kroepoek', 'pindasaus', 'satésaus', 'conimex', 'old el paso', 'santa maria',
-      'wokmix', 'nasimix', 'bamimix',
+      'wokmix', 'nasimix', 'bamimix', 'noodles', 'noedels', 'udon', 'ramen', 'chilisaus', 'sweet chilisaus', 'woksaus',
+      'rotisaus', 'guacamole', 'sesamolie', 'chili olie', 'chiliolie', 'rijstazijn', 'sushi', 'flatbread wraps',
     ],
   },
   {
@@ -104,10 +109,11 @@ export const AISLES: Aisle[] = [
       'tomatenpuree', 'passata', 'gepelde tomaten', 'tomatenblokjes', 'tomatensaus', 'kidneybonen', 'kikkererwten',
       'witte bonen', 'bruine bonen', 'linzen', '^mais', 'appelmoes', 'augurk', 'zilveruitjes', 'soep', 'bouillon',
       '^jus', 'mayonaise', 'ketchup', 'mosterd', 'saus', 'tonijn', 'ansjovis', 'kappertjes', 'zongedroogde tomaten',
-      'blik', 'rode bieten',
+      'blik', 'rode bieten', 'gesneden bieten', 'gezeefde tomaten', 'puree', 'purree', 'zwarte bonen', 'bonen in tomatensaus',
+      'bouillon kruiden', 'bouillonkruiden', 'bouillonblokje',
       // Brands of sauces, soups and mixes.
-      'chicken tonight', 'honig', 'knorr', 'unox', "grand'italia", 'grand italia', 'bertolli', 'calvé', 'calve',
-      'heinz', 'remia', 'mix voor', 'maggi', 'van der meulen',
+      'unox', "grand'italia", 'grand italia', 'bertolli', 'calvé', 'calve', 'heinz', 'remia', 'mix voor',
+      'van der meulen',
     ],
   },
   {
@@ -120,7 +126,8 @@ export const AISLES: Aisle[] = [
       'balsamico', 'bloem', 'meel', 'suiker', 'bakpoeder', 'gist', 'vanille', 'maizena', 'paneermeel',
       'pijnboompitten', 'noten', 'cashew', 'walnoten', 'amandel', 'gebakken uitjes', 'kruidnagel', 'laurier',
       'chilivlokken', 'knoflookpoeder', 'uienpoeder', 'tijm', 'rozemarijn', 'bakpapier', 'cacao', 'sesamzaad',
-      'pindas', "pinda's", 'rozijnen',
+      'pindas', "pinda's", 'rozijnen', 'chilipoeder', 'poeder', 'basterdsuiker', 'pannenkoek', 'pannenkoekenmix',
+      'cakemix', 'bakmix',
     ],
   },
   {
@@ -129,14 +136,14 @@ export const AISLES: Aisle[] = [
     icon: 'cafe-outline',
     words: [
       'hagelslag', 'pindakaas', '^jam', 'honing', 'muesli', 'cornflakes', 'havermout', 'ontbijtkoek', 'beschuit',
-      'crackers', 'koffie', '^thee', 'granola', 'appelstroop', 'chocoladepasta', 'vlokken',
+      'crackers', 'koffie', '^thee', 'granola', 'appelstroop', 'chocoladepasta', 'vlokken', 'cruesli',
     ],
   },
   {
     key: 'snoep',
     label: 'Koek, snoep & chips',
     icon: 'ice-cream-outline',
-    words: ['chips', 'koek', 'koekjes', 'chocolade', 'snoep', 'drop', 'nootjes', 'popcorn', 'stroopwafel', 'zoutjes'],
+    words: ['chips', 'koek', 'koekjes', 'chocolade', 'snoep', 'drop', 'nootjes', 'popcorn', 'stroopwafel', 'zoutjes', 'snack'],
   },
   {
     key: 'dranken',
@@ -144,7 +151,7 @@ export const AISLES: Aisle[] = [
     icon: 'beer-outline',
     words: [
       '^water', 'spa ', 'frisdrank', 'cola', '^sap', 'jus d', 'sinaasappelsap', 'appelsap', '^bier', 'wijn',
-      'limonade', 'siroop', 'ice tea', 'tonic',
+      'limonade', 'siroop', 'ice tea', 'tonic', 'gembersiroop',
     ],
   },
   {
@@ -153,7 +160,7 @@ export const AISLES: Aisle[] = [
     icon: 'snow-outline',
     words: [
       'diepvries', '^ijs', 'ijsblokjes', 'friet', 'patat', 'ovenfriet', 'kroket', 'frikandel', 'pizza',
-      'bladerdeeg', 'vissticks', 'bitterballen', 'loempia',
+      'bladerdeeg', 'vissticks', 'bitterballen', 'loempia', 'gyoza', 'dumplings', 'a la creme', 'sojabonen', 'edamame',
     ],
   },
   {
@@ -175,19 +182,54 @@ export function aisle(key: AisleKey): Aisle {
   return BY_KEY.get(key) ?? BY_KEY.get('overig')!;
 }
 
-/** Where a product most likely is, from the words in its name. */
-export function guessAisle(name: string): AisleKey {
-  const text = ` ${name.toLowerCase().replace(/[()]/g, ' ')} `;
-  let best: { key: AisleKey; length: number } | null = null;
-  for (const a of AISLES) {
-    for (const word of a.words) {
-      const atStart = word.startsWith('^');
-      const w = atStart ? word.slice(1) : word;
-      const found = atStart ? new RegExp(`[\\s-]${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(text) : text.includes(w);
-      if (found && (!best || w.length > best.length)) best = { key: a.key, length: w.length };
+// Brands whose products are all in one aisle, whatever else the name says.
+const BRANDS: [string, AisleKey][] = [
+  ['chicken tonight', 'conserven'],
+  ['honig', 'conserven'],
+  ['knorr', 'conserven'],
+  ['maggi', 'conserven'],
+  ['conimex', 'wereld'],
+  ['old el paso', 'wereld'],
+  ['santa maria', 'wereld'],
+];
+
+/** Lower case without accents, so "Maïzena" and "crème fraîche" match too. */
+function plain(text: string) {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+type Match = { key: AisleKey; start: number; end: number };
+
+const WORDS = AISLES.flatMap((a) =>
+  a.words.map((word) => {
+    const atStart = word.startsWith('^');
+    const w = plain(atStart ? word.slice(1) : word);
+    return { key: a.key, w, atStart };
+  }),
+);
+
+function matches(text: string): Match[] {
+  const found: Match[] = [];
+  for (const { key, w, atStart } of WORDS) {
+    for (let i = text.indexOf(w); i !== -1; i = text.indexOf(w, i + 1)) {
+      if (!atStart || /[\s'-]/.test(text[i - 1])) found.push({ key, start: i, end: i + w.length });
     }
   }
-  return best?.key ?? 'overig';
+  // Only words that aren't part of a longer match; of those the last, then the longest.
+  const own = found.filter(
+    (m) => !found.some((o) => o !== m && o.start <= m.start && m.end <= o.end && o.end - o.start > m.end - m.start),
+  );
+  return own.sort((a, b) => b.end - a.end || b.end - b.start - (a.end - a.start));
+}
+
+/** Where a product most likely is, from the words in its name. */
+export function guessAisle(name: string): AisleKey {
+  const full = ` ${plain(name)} `;
+  const brand = BRANDS.find(([b]) => full.includes(b));
+  if (brand) return brand[1];
+  // "champignons, gehalveerd" and "eieren (optioneel)": the product is what comes first.
+  const main = ` ${full.replace(/\([^)]*\)?/g, ' ').split(/[,:]/)[0]} `;
+  return (matches(main)[0] ?? matches(full)[0])?.key ?? 'overig';
 }
 
 /** The family's choice for this product, or else the guess. */
