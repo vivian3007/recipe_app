@@ -1,3 +1,5 @@
+import type { AisleSetup } from './aisles';
+
 export type Household = {
   id: string;
   name: string;
@@ -18,6 +20,8 @@ export type Household = {
   shopper_ids: string[];
   /** Products the family moved to another supermarket aisle: { "name in lower case": aisle key }. */
   aisle_overrides: Record<string, string>;
+  /** The family's own aisles: their order, names and aisles they added. */
+  aisle_setup: AisleSetup;
 };
 
 /**

@@ -3,7 +3,8 @@ import type { IconName } from '@/components/ui';
 /**
  * The shopping list in the order you walk through a typical Dutch supermarket. Products are
  * recognised by words in their name; the family can move a product to another aisle, which is
- * remembered (household.aisle_overrides).
+ * remembered (household.aisle_overrides). They can also put the aisles in the order of their own
+ * supermarket, rename them and add their own (household.aisle_setup).
  */
 export type AisleKey =
   | 'groente'
@@ -232,8 +233,47 @@ export function guessAisle(name: string): AisleKey {
   return (matches(main)[0] ?? matches(full)[0])?.key ?? 'overig';
 }
 
-/** The family's choice for this product, or else the guess. */
-export function aisleOf(name: string, overrides: Record<string, string>): AisleKey {
+/** The family's own aisles (household.aisle_setup). */
+export type AisleSetup = {
+  /** Aisle keys in the order of their supermarket; aisles missing from it come after, in the standard order. */
+  order?: string[];
+  /** Their own names for standard aisles. */
+  names?: Record<string, string>;
+  /** Aisles they added; products only go there when someone moves them there. */
+  extra?: { key: string; label: string }[];
+};
+
+/** An aisle on the family's list: a standard one (maybe renamed) or one they added (own). */
+export type ShopAisle = { key: string; label: string; icon: IconName; own: boolean; standardLabel?: string };
+
+/** All the family's aisles, in their order. */
+export function familyAisles(setup: AisleSetup | undefined): ShopAisle[] {
+  const all: ShopAisle[] = [
+    ...AISLES.map((a) => ({
+      key: a.key,
+      label: setup?.names?.[a.key]?.trim() || a.label,
+      icon: a.icon,
+      own: false,
+      standardLabel: a.label,
+    })),
+    ...(setup?.extra ?? []).map((e): ShopAisle => ({ key: e.key, label: e.label, icon: 'pricetag-outline', own: true })),
+  ];
+  const byKey = new Map(all.map((a) => [a.key, a]));
+  const chosen = [...new Set(setup?.order ?? [])].filter((k) => byKey.has(k));
+  return [...chosen.map((k) => byKey.get(k)!), ...all.filter((a) => !chosen.includes(a.key))];
+}
+
+/** Adds an aisle of their own, just above Overig. */
+export function withNewAisle(setup: AisleSetup, aisles: ShopAisle[], label: string) {
+  const key = `own-${Date.now().toString(36)}`;
+  const order = aisles.map((a) => a.key);
+  const overig = order.indexOf('overig');
+  order.splice(overig === -1 ? order.length : overig, 0, key);
+  return { key, setup: { ...setup, order, extra: [...(setup.extra ?? []), { key, label }] } };
+}
+
+/** The family's choice for this product (if that aisle still exists), or else the guess. */
+export function aisleOf(name: string, overrides: Record<string, string>, aisles: ShopAisle[]): string {
   const chosen = overrides[name.trim().toLowerCase()];
-  return chosen && BY_KEY.has(chosen as AisleKey) ? (chosen as AisleKey) : guessAisle(name);
+  return chosen && aisles.some((a) => a.key === chosen) ? chosen : guessAisle(name);
 }

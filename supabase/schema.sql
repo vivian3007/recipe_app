@@ -18,6 +18,8 @@ create table public.households (
   avg_options jsonb not null default '[]',
   -- Products moved to another supermarket aisle: { "name in lower case": "aisle key" }.
   aisle_overrides jsonb not null default '{}',
+  -- The family's own aisles: { order: [aisle key], names: { key: name }, extra: [{ key, label }] }.
+  aisle_setup jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
 

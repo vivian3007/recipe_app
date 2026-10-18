@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 
+import type { AisleSetup } from './aisles';
 import { base64ToArrayBuffer } from './base64';
 import { supabase } from './supabase';
 import { replaceTags } from './tags';
@@ -275,6 +276,11 @@ export async function listAvgDishes(): Promise<Ingredient[][]> {
 /** Products the family moved to another supermarket aisle. */
 export async function saveAisleOverrides(householdId: string, overrides: Record<string, string>) {
   check(await supabase.from('households').update({ aisle_overrides: overrides }).eq('id', householdId));
+}
+
+/** The family's own aisles: their order, names and aisles they added. */
+export async function saveAisleSetup(householdId: string, setup: AisleSetup) {
+  check(await supabase.from('households').update({ aisle_setup: setup }).eq('id', householdId));
 }
 
 /** When reminders go out, and who does the shopping. */

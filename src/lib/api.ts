@@ -24,6 +24,7 @@ export const {
   listAvgDishes,
   saveNotificationSettings,
   saveAisleOverrides,
+  saveAisleSetup,
   markWeekReady,
   unmarkWeekReady,
   setDayChoosers,

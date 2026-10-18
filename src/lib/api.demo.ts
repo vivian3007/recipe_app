@@ -1,6 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 import * as ImagePicker from 'expo-image-picker';
 
+import type { AisleSetup } from './aisles';
 import { dateOfDay, fromISODate, toISODate, weekStartOf, weekdayOf } from './dates';
 import { replaceTags } from './tags';
 import type {
@@ -199,6 +200,7 @@ function seedStore(): Store {
       remind_hour: 9,
       shopper_ids: ['demo-mama'],
       aisle_overrides: {},
+      aisle_setup: {},
     },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
@@ -566,6 +568,13 @@ export async function listAvgDishes(): Promise<Ingredient[][]> {
 export async function saveAisleOverrides(_householdId: string, overrides: Record<string, string>) {
   mutate((s) => {
     s.household.aisle_overrides = overrides;
+  });
+}
+
+/** The family's own aisles: their order, names and aisles they added. */
+export async function saveAisleSetup(_householdId: string, setup: AisleSetup) {
+  mutate((s) => {
+    s.household.aisle_setup = setup;
   });
 }
 

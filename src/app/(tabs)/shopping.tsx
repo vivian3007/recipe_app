@@ -19,12 +19,14 @@ import {
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, EmptyState, Loading } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
-import { AISLES, aisleOf, type AisleKey } from '@/lib/aisles';
+import { AisleEditor } from '@/components/AisleEditor';
+import { aisleOf, familyAisles, guessAisle, withNewAisle, type AisleSetup } from '@/lib/aisles';
 import {
   addShoppingExtra,
   listShoppingChecks,
   listShoppingExtras,
   removeShoppingExtra,
+  saveAisleSetup,
   saveAisleOverrides,
   setShoppingCheck,
 } from '@/lib/api';
@@ -46,6 +48,13 @@ export default function Shopping() {
   const overrides = aisleDraft ?? household?.aisle_overrides ?? {};
   // The product whose aisle is being chosen.
   const [moving, setMoving] = useState<ShoppingItem | null>(null);
+  // Changed aisles show straight away, also while saving.
+  const [setupDraft, setSetupDraft] = useState<AisleSetup | null>(null);
+  const setup = setupDraft ?? household?.aisle_setup ?? {};
+  const shopAisles = familyAisles(setup);
+  const [editingAisles, setEditingAisles] = useState(false);
+  // A new aisle typed in the "which aisle" sheet.
+  const [newAisle, setNewAisle] = useState('');
   const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ShoppingExtra[]>([]);
@@ -84,15 +93,18 @@ export default function Shopping() {
   const open = items.filter((i) => !checked.has(i.key));
   const done = items.filter((i) => checked.has(i.key));
   // What's still to get, per aisle in the order you walk through the shop.
-  const aisles = AISLES.map((a) => ({ aisle: a, items: open.filter((i) => aisleOf(i.name, overrides) === a.key) })).filter(
+  const aisles = shopAisles.map((a) => ({ aisle: a, items: open.filter((i) => aisleOf(i.name, overrides, shopAisles) === a.key) })).filter(
     (group) => group.items.length > 0,
   );
 
-  /** Puts a product in another aisle, for the whole family and every week. */
-  async function moveTo(item: ShoppingItem, key: AisleKey) {
+  /** Puts a product in another aisle, for the whole family and every week; null: back to the guess. */
+  async function moveTo(item: ShoppingItem, key: string | null) {
     setMoving(null);
     if (!household) return;
-    const next = { ...overrides, [item.name.trim().toLowerCase()]: key };
+    const name = item.name.trim().toLowerCase();
+    const next = { ...overrides };
+    if (key) next[name] = key;
+    else delete next[name];
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setAisleDraft(next);
     try {
@@ -103,6 +115,36 @@ export default function Shopping() {
     } finally {
       setAisleDraft(null);
     }
+  }
+
+  /** Saves the family's aisles: order, names and their own aisles. */
+  async function saveSetup(next: AisleSetup) {
+    if (!household) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setSetupDraft(next);
+    try {
+      await saveAisleSetup(household.id, next);
+      await refresh();
+    } catch (e) {
+      notify('Paden opslaan mislukt', (e as Error).message);
+    } finally {
+      setSetupDraft(null);
+    }
+  }
+
+  /** Makes a new aisle and puts the product in it. */
+  async function moveToNewAisle(item: ShoppingItem) {
+    const label = newAisle.trim();
+    if (!label) return;
+    setNewAisle('');
+    const added = withNewAisle(setup, shopAisles, label);
+    await saveSetup(added.setup);
+    await moveTo(item, added.key);
+  }
+
+  function closeMoving() {
+    setMoving(null);
+    setNewAisle('');
   }
 
   async function toggle(item: ShoppingItem) {
@@ -240,11 +282,20 @@ export default function Shopping() {
               <Text style={styles.count}>
                 {open.length} {open.length === 1 ? 'item' : 'items'} te halen
               </Text>
-              <Pressable onPress={share} hitSlop={8} style={styles.share}>
-                <Ionicons name="share-outline" size={18} color={colors.primaryDark} />
-                <Text style={styles.shareText}>Delen</Text>
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable onPress={() => setEditingAisles(true)} hitSlop={8} style={styles.share}>
+                  <Ionicons name="reorder-three-outline" size={18} color={colors.primaryDark} />
+                  <Text style={styles.shareText}>Paden</Text>
+                </Pressable>
+                <Pressable onPress={share} hitSlop={8} style={styles.share}>
+                  <Ionicons name="share-outline" size={18} color={colors.primaryDark} />
+                  <Text style={styles.shareText}>Delen</Text>
+                </Pressable>
+              </View>
             </View>
+            <Text style={styles.moveHint}>
+              Staat iets in het verkeerde pad? Tik op <Ionicons name="swap-vertical-outline" size={13} /> om het te verplaatsen.
+            </Text>
 
             {aisles.map(({ aisle: a, items: list }) => (
               <View key={a.key} style={{ gap: spacing(2) }}>
@@ -287,14 +338,25 @@ export default function Shopping() {
         )}
       </ScrollView>
 
-      <Modal visible={!!moving} transparent animationType="fade" onRequestClose={() => setMoving(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setMoving(null)}>
+      <Modal visible={!!moving} transparent animationType="fade" onRequestClose={closeMoving}>
+        <Pressable style={styles.backdrop} onPress={closeMoving}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <Text style={styles.sheetTitle}>In welk gangpad ligt {moving?.name}?</Text>
             <Text style={styles.sheetHint}>De app onthoudt het voor het hele gezin.</Text>
             <ScrollView style={{ maxHeight: 420 }}>
-              {AISLES.map((a) => {
-                const current = moving ? aisleOf(moving.name, overrides) === a.key : false;
+              {moving && overrides[moving.name.trim().toLowerCase()] && (
+                <Pressable
+                  onPress={() => moveTo(moving, null)}
+                  style={({ pressed }) => [styles.sheetRow, pressed && { opacity: 0.6 }]}
+                >
+                  <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
+                  <Text style={styles.sheetLabel}>
+                    Automatisch ({shopAisles.find((a) => a.key === guessAisle(moving.name))?.label})
+                  </Text>
+                </Pressable>
+              )}
+              {shopAisles.map((a) => {
+                const current = moving ? aisleOf(moving.name, overrides, shopAisles) === a.key : false;
                 return (
                   <Pressable
                     key={a.key}
@@ -308,9 +370,36 @@ export default function Shopping() {
                 );
               })}
             </ScrollView>
+            <View style={styles.addRow}>
+              <TextInput
+                value={newAisle}
+                onChangeText={setNewAisle}
+                onSubmitEditing={() => moving && moveToNewAisle(moving)}
+                submitBehavior="submit"
+                returnKeyType="done"
+                placeholder="Of een nieuw pad, bijv. Dierenvoer"
+                placeholderTextColor={colors.placeholder}
+                style={[styles.addInput, styles.newAisleInput]}
+              />
+              <Button
+                title="Maken"
+                icon="add"
+                variant="secondary"
+                onPress={() => moving && moveToNewAisle(moving)}
+                disabled={!newAisle.trim()}
+              />
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
+
+      <AisleEditor
+        visible={editingAisles}
+        onClose={() => setEditingAisles(false)}
+        setup={setup}
+        aisles={shopAisles}
+        onSave={saveSetup}
+      />
     </KeyboardScreen>
   );
 }
@@ -458,6 +547,9 @@ const styles = StyleSheet.create({
   addButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   extraError: { color: colors.danger, fontSize: 13 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing(1) },
+  headerActions: { flexDirection: 'row', gap: spacing(2) },
+  newAisleInput: { paddingVertical: spacing(2.5), fontSize: 15 },
+  moveHint: { fontSize: 13, color: colors.textMuted, marginTop: -spacing(1) },
   count: { fontSize: 17, fontWeight: '800', color: colors.text },
   share: {
     flexDirection: 'row',
