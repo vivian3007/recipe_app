@@ -22,7 +22,12 @@ export type Household = {
   aisle_overrides: Record<string, string>;
   /** The family's own aisles: their order, names and aisles they added. */
   aisle_setup: AisleSetup;
+  /** Vaste boodschappen: products they buy often and go through every week. */
+  staples: Staple[];
 };
+
+/** A product on the family's fixed list (Vaste boodschappen). */
+export type Staple = { id: string; name: string };
 
 /**
  * An AVG choice the family added themselves (the amount is for one person), or with `hidden`
@@ -79,6 +84,8 @@ export type WeekPlan = {
   /** When whoever chose marked the week as ready; null (or missing) while it isn't. */
   ready_at?: string | null;
   ready_by?: string | null;
+  /** Staples marked "niet nodig" this week. */
+  staples_skipped?: string[];
 };
 
 /** The family's notification settings (see Household). */
@@ -148,6 +155,8 @@ export type ShoppingExtra = {
   id: string;
   week_plan_id: string;
   name: string;
+  /** The staple it was added from, if any. */
+  staple_id?: string | null;
 };
 
 export type RecipeInput = {

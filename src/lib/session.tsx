@@ -33,6 +33,7 @@ function withSettings(h: Partial<Household> & Pick<Household, 'id' | 'name' | 'i
     shopper_ids: h.shopper_ids ?? [],
     aisle_overrides: h.aisle_overrides ?? {},
     aisle_setup: h.aisle_setup ?? {},
+    staples: h.staples ?? [],
   };
   // Weeks start on the shopping day; set before any screen sees the household.
   applyShoppingDay(household.shopping_day);

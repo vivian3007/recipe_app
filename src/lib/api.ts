@@ -25,6 +25,8 @@ export const {
   saveNotificationSettings,
   saveAisleOverrides,
   saveAisleSetup,
+  saveStaples,
+  setStapleSkipped,
   markWeekReady,
   unmarkWeekReady,
   setDayChoosers,

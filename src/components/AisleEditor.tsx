@@ -373,6 +373,7 @@ const styles = StyleSheet.create({
   addRow: { flexDirection: 'row', gap: spacing(2), alignItems: 'center', marginTop: spacing(1) },
   addInput: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

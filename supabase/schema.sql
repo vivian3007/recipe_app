@@ -20,6 +20,8 @@ create table public.households (
   aisle_overrides jsonb not null default '{}',
   -- The family's own aisles: { order: [aisle key], names: { key: name }, extra: [{ key, label }] }.
   aisle_setup jsonb not null default '{}',
+  -- Vaste boodschappen: products they buy often and go through every week: [{ id, name }].
+  staples jsonb not null default '[]',
   created_at timestamptz not null default now()
 );
 
@@ -66,6 +68,8 @@ create table public.week_plans (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households (id) on delete cascade,
   week_start date not null,
+  -- Staples (households.staples) marked "niet nodig" this week.
+  staples_skipped text[] not null default '{}',
   unique (household_id, week_start)
 );
 
@@ -110,6 +114,8 @@ create table public.shopping_extras (
   id uuid primary key default gen_random_uuid(),
   week_plan_id uuid not null references public.week_plans (id) on delete cascade,
   name text not null check (length(trim(name)) > 0),
+  -- The staple (households.staples) it was added from, if any.
+  staple_id text,
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 );

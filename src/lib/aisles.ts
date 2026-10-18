@@ -29,7 +29,7 @@ export type Aisle = { key: AisleKey; label: string; icon: IconName; words: strin
 // doesn't count ("kokosmelk" is not melk). Of the rest the last one wins, because in Dutch the
 // product comes last: "tomatensoep" is soup, "witte wijnazijn" is vinegar. A word starting with ^
 // only matches at the start of a word, for short words like "ui" (not in "fruit" or "kruiden").
-// Brands that sit in one aisle win from any word (BRANDS).
+// Brands and words that decide the aisle on their own win from any other word (DECISIVE).
 export const AISLES: Aisle[] = [
   {
     key: 'groente',
@@ -66,7 +66,7 @@ export const AISLES: Aisle[] = [
       'schnitzel', 'hamburger', 'braadworst', 'slavink', 'worst', 'rookworst', 'shoarma', 'gyros', 'kalkoen',
       'lamsvlees', 'sucade', 'stoofvlees', 'riblap', 'saté', 'zalm', '^vis', 'visfilet', 'kabeljauw', 'pangasius',
       'tilapia', 'koolvis', 'garnaal', 'garnalen', 'scampi', 'mosselen', 'vegaburger', 'vega', 'tofu', 'tempeh',
-      'vegetarisch', 'falafel', 'kipstukjes', 'vleesvervanger',
+      'vegetarisch', 'falafel', 'kipstukjes', 'vleesvervanger', 'soepballetjes', 'soepbolletjes', 'knakworst',
     ],
   },
   {
@@ -86,7 +86,7 @@ export const AISLES: Aisle[] = [
     words: [
       'melk', 'karnemelk', 'yoghurt', 'kwark', '^vla', 'room', 'slagroom', 'kookroom', 'kookzuivel', 'crème fraîche',
       'creme fraiche', 'zure room', 'boter', 'roomboter', 'margarine', '^ei', 'eieren', 'mascarpone', 'toetje',
-      'skyr', 'zuivel', 'sour cream',
+      'skyr', 'zuivel', 'sour cream', 'optimel', 'drinkyoghurt',
     ],
   },
   {
@@ -137,14 +137,17 @@ export const AISLES: Aisle[] = [
     icon: 'cafe-outline',
     words: [
       'hagelslag', 'pindakaas', '^jam', 'honing', 'muesli', 'cornflakes', 'havermout', 'ontbijtkoek', 'beschuit',
-      'crackers', 'koffie', '^thee', 'granola', 'appelstroop', 'chocoladepasta', 'vlokken', 'cruesli',
+      'crackers', 'koffie', '^thee', 'granola', 'appelstroop', 'chocoladepasta', 'vlokken', 'cruesli', 'wasa',
+      'matzes', 'matze', 'rijstwafel', 'rijstwafels', 'knackebrod', 'ontbijtkoek', 'hageslag',
     ],
   },
   {
     key: 'snoep',
     label: 'Koek, snoep & chips',
     icon: 'ice-cream-outline',
-    words: ['chips', 'koek', 'koekjes', 'chocolade', 'snoep', 'drop', 'nootjes', 'popcorn', 'stroopwafel', 'zoutjes', 'snack'],
+    words: ['chips', 'koek', 'koekjes', 'chocolade', 'snoep', 'drop', 'nootjes', 'popcorn', 'stroopwafel', 'zoutjes', 'snack', 'chocola',
+      'wafels', 'speculoos', 'speculaas', 'biscuit', 'melkbiscuit', 'mergpijp',
+    ],
   },
   {
     key: 'dranken',
@@ -152,7 +155,7 @@ export const AISLES: Aisle[] = [
     icon: 'beer-outline',
     words: [
       '^water', 'spa ', 'frisdrank', 'cola', '^sap', 'jus d', 'sinaasappelsap', 'appelsap', '^bier', 'wijn',
-      'limonade', 'siroop', 'ice tea', 'tonic', 'gembersiroop',
+      'limonade', 'siroop', 'ice tea', 'icetea', 'tonic', 'gembersiroop', 'dubbelfris', 'fristi', 'chocomel',
     ],
   },
   {
@@ -171,7 +174,8 @@ export const AISLES: Aisle[] = [
     words: [
       'wc-papier', 'toiletpapier', 'keukenpapier', 'afwasmiddel', 'wasmiddel', 'vaatwas', 'tandpasta', 'shampoo',
       'douchegel', 'zeep', 'vuilniszak', 'aluminiumfolie', 'folie', 'luiers', 'deodorant', 'tandenborstel',
-      'schoonmaak', 'sponsjes', 'batterij',
+      'schoonmaak', 'sponsjes', 'batterij', 'wc papier', 'wc eend', 'wc-eend', 'keukenrol', 'tissues', 'zakdoekjes',
+      'wasverzachter', 'handzeep',
     ],
   },
   { key: 'overig', label: 'Overig', icon: 'ellipsis-horizontal-circle-outline', words: [] },
@@ -183,8 +187,14 @@ export function aisle(key: AisleKey): Aisle {
   return BY_KEY.get(key) ?? BY_KEY.get('overig')!;
 }
 
-// Brands whose products are all in one aisle, whatever else the name says.
-const BRANDS: [string, AisleKey][] = [
+// Brands whose products are all in one aisle, and words that say where something is on their own
+// ("diepvries fruit", "hagelslag melk"), whatever else the name says.
+const DECISIVE: [string, AisleKey][] = [
+  ['diepvries', 'diepvries'],
+  ['hagelslag', 'ontbijt'],
+  ['hageslag', 'ontbijt'],
+  [' vlokken', 'ontbijt'],
+  ['vleeswaren', 'beleg'],
   ['chicken tonight', 'conserven'],
   ['honig', 'conserven'],
   ['knorr', 'conserven'],
@@ -226,8 +236,8 @@ function matches(text: string): Match[] {
 /** Where a product most likely is, from the words in its name. */
 export function guessAisle(name: string): AisleKey {
   const full = ` ${plain(name)} `;
-  const brand = BRANDS.find(([b]) => full.includes(b));
-  if (brand) return brand[1];
+  const decisive = DECISIVE.find(([word]) => full.includes(word));
+  if (decisive) return decisive[1];
   // "champignons, gehalveerd" and "eieren (optioneel)": the product is what comes first.
   const main = ` ${full.replace(/\([^)]*\)?/g, ' ').split(/[,:]/)[0]} `;
   return (matches(main)[0] ?? matches(full)[0])?.key ?? 'overig';
@@ -272,8 +282,13 @@ export function withNewAisle(setup: AisleSetup, aisles: ShopAisle[], label: stri
   return { key, setup: { ...setup, order, extra: [...(setup.extra ?? []), { key, label }] } };
 }
 
-/** The family's choice for this product (if that aisle still exists), or else the guess. */
+/**
+ * The family's choice for this product (if that aisle still exists), or else the guess. "Thee
+ * (rooibos)" follows a choice for "Thee" too.
+ */
 export function aisleOf(name: string, overrides: Record<string, string>, aisles: ShopAisle[]): string {
-  const chosen = overrides[name.trim().toLowerCase()];
-  return chosen && aisles.some((a) => a.key === chosen) ? chosen : guessAisle(name);
+  const full = name.trim().toLowerCase();
+  const base = full.replace(/\s*\(.*$/, '');
+  const chosen = [overrides[full], overrides[base]].find((key) => key && aisles.some((a) => a.key === key));
+  return chosen ?? guessAisle(name);
 }

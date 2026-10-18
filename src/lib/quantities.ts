@@ -84,6 +84,8 @@ export type ShoppingItem = {
   recipes: string[];
   /** Set for things someone added to the list by hand. */
   extraId?: string;
+  /** The staple (Vaste boodschappen) it came from: "Thee" for "Thee rooibos". */
+  staple?: string;
 };
 
 /** Combines the ingredients of all meals in a week, scaled to each meal's number of people. */

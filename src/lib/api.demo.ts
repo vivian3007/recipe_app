@@ -15,6 +15,7 @@ import type {
   RecipeInput,
   RecipeWithIngredients,
   ShoppingExtra,
+  Staple,
   WeekPlan,
   WeekPlanMeal,
 } from './types';
@@ -201,6 +202,7 @@ function seedStore(): Store {
       shopper_ids: ['demo-mama'],
       aisle_overrides: {},
       aisle_setup: {},
+      staples: [],
     },
     profiles: [
       { id: 'demo-mama', display_name: 'Mama', household_id: HOUSEHOLD_ID },
@@ -571,6 +573,13 @@ export async function saveAisleOverrides(_householdId: string, overrides: Record
   });
 }
 
+/** Vaste boodschappen: the products the family goes through every week. */
+export async function saveStaples(_householdId: string, staples: Staple[]) {
+  mutate((s) => {
+    s.household.staples = staples;
+  });
+}
+
 /** The family's own aisles: their order, names and aisles they added. */
 export async function saveAisleSetup(_householdId: string, setup: AisleSetup) {
   mutate((s) => {
@@ -703,10 +712,25 @@ export async function listShoppingExtras(weekPlanId: string): Promise<ShoppingEx
   return (load().extras ?? []).filter((e) => e.week_plan_id === weekPlanId).map((e) => ({ ...e }));
 }
 
-export async function addShoppingExtra(_householdId: string, weekStart: string, _userId: string, name: string) {
+export async function addShoppingExtra(
+  _householdId: string,
+  weekStart: string,
+  _userId: string,
+  name: string,
+  stapleId?: string,
+) {
   mutate((s) => {
     const plan = ensurePlan(s, weekStart);
-    s.extras = [...(s.extras ?? []), { id: newId(), week_plan_id: plan.id, name }];
+    s.extras = [...(s.extras ?? []), { id: newId(), week_plan_id: plan.id, name, staple_id: stapleId ?? null }];
+  });
+}
+
+/** Marks a staple as "niet nodig" this week, or takes that back. */
+export async function setStapleSkipped(_householdId: string, weekStart: string, stapleId: string, skipped: boolean) {
+  mutate((s) => {
+    const plan = ensurePlan(s, weekStart);
+    const rest = (plan.staples_skipped ?? []).filter((id) => id !== stapleId);
+    plan.staples_skipped = skipped ? [...rest, stapleId] : rest;
   });
 }
 

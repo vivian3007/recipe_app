@@ -101,7 +101,8 @@ Eenmalig instellen:
 5. In **Weekplan** kiest degene die aan de beurt is de hele week. Tik op het potloodje bij **Wie kiest er?** om een week of een paar dagen aan iemand anders te geven, en op **Vaste volgorde** om terug te gaan. Daarna kies je per dag een gerecht (of vanuit een recept: **Toevoegen aan weekplan**). Houd ≡ vast om een gerecht naar een andere dag te slepen; staat daar al iets, dan wisselen ze om.
    Gewoon aardappels, groente en vlees? Tik bij **Kies een gerecht** op **AVG samenstellen** en kies wat je eet; de hoeveelheden komen vanzelf op de boodschappenlijst. Met **+ Nieuw** voeg je een eigen keuze toe, die er daarna voor het hele gezin tussen staat.
 6. Wil je een gerecht van iemand anders net even anders, bijvoorbeeld met kip in plaats van gehakt? Tik in het weekplan op **Aanpassen**. Je zet er een opmerking bij en past de ingrediënten aan voor die ene avond; het originele recept blijft hetzelfde.
-7. In **Boodschappen** staat automatisch alles wat je nodig hebt, inclusief je aanpassingen.
+7. In **Boodschappen** staat automatisch alles wat je nodig hebt, inclusief je aanpassingen, per supermarktpad. Staat iets in het verkeerde pad, tik dan op het pijltjesknopje; met **Paden** zet je de paden in de volgorde van je eigen supermarkt, geef je ze een andere naam of maak je er zelf een bij.
+8. Wat jullie vaak kopen zet je bij **Vaste boodschappen** (plak gewoon je lijstje, elke regel wordt een product). Loop die elke week even langs: **Nodig** zet het op het boodschappenlijstje, **Niet nodig** slaat het deze week over; wat je hebt bekeken zakt naar **Bekeken** (met **Ongedaan**). Tik op een naam om die te veranderen of het product van de vaste lijst te halen.
 
 ## Projectstructuur
 

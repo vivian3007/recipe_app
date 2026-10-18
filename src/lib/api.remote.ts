@@ -13,6 +13,7 @@ import type {
   RecipeInput,
   RecipeWithIngredients,
   ShoppingExtra,
+  Staple,
   WeekPlan,
   WeekPlanMeal,
 } from './types';
@@ -155,7 +156,7 @@ export async function getWeekPlan(
   const plan = check(
     await supabase
       .from('week_plans')
-      .select('id, household_id, week_start, ready_at, ready_by')
+      .select('id, household_id, week_start, ready_at, ready_by, staples_skipped')
       .eq('week_start', weekStart)
       .maybeSingle(),
   ) as WeekPlan | null;
@@ -189,7 +190,7 @@ async function ensureWeekPlan(householdId: string, weekStart: string): Promise<W
         { household_id: householdId, week_start: weekStart },
         { onConflict: 'household_id,week_start', ignoreDuplicates: false },
       )
-      .select('id, household_id, week_start')
+      .select('id, household_id, week_start, staples_skipped')
       .single(),
   ) as WeekPlan;
 }
@@ -278,6 +279,11 @@ export async function saveAisleOverrides(householdId: string, overrides: Record<
   check(await supabase.from('households').update({ aisle_overrides: overrides }).eq('id', householdId));
 }
 
+/** Vaste boodschappen: the products the family goes through every week. */
+export async function saveStaples(householdId: string, staples: Staple[]) {
+  check(await supabase.from('households').update({ staples }).eq('id', householdId));
+}
+
 /** The family's own aisles: their order, names and aisles they added. */
 export async function saveAisleSetup(householdId: string, setup: AisleSetup) {
   check(await supabase.from('households').update({ aisle_setup: setup }).eq('id', householdId));
@@ -364,15 +370,33 @@ export async function listShoppingExtras(weekPlanId: string): Promise<ShoppingEx
   return check(
     await supabase
       .from('shopping_extras')
-      .select('id, week_plan_id, name')
+      .select('id, week_plan_id, name, staple_id')
       .eq('week_plan_id', weekPlanId)
       .order('created_at'),
   ) as ShoppingExtra[];
 }
 
-export async function addShoppingExtra(householdId: string, weekStart: string, userId: string, name: string) {
+export async function addShoppingExtra(
+  householdId: string,
+  weekStart: string,
+  userId: string,
+  name: string,
+  stapleId?: string,
+) {
   const plan = await ensureWeekPlan(householdId, weekStart);
-  check(await supabase.from('shopping_extras').insert({ week_plan_id: plan.id, name, created_by: userId }));
+  check(
+    await supabase
+      .from('shopping_extras')
+      .insert({ week_plan_id: plan.id, name, created_by: userId, staple_id: stapleId ?? null }),
+  );
+}
+
+/** Marks a staple as "niet nodig" this week, or takes that back. */
+export async function setStapleSkipped(householdId: string, weekStart: string, stapleId: string, skipped: boolean) {
+  const plan = await ensureWeekPlan(householdId, weekStart);
+  const rest = (plan.staples_skipped ?? []).filter((id) => id !== stapleId);
+  const staples_skipped = skipped ? [...rest, stapleId] : rest;
+  check(await supabase.from('week_plans').update({ staples_skipped }).eq('id', plan.id));
 }
 
 export async function removeShoppingExtra(extra: ShoppingExtra) {

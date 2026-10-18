@@ -85,15 +85,26 @@ export default function Shopping() {
       [
         ...buildShoppingList(meals),
         ...extras.map(
-          (e): ShoppingItem => ({ key: `extra:${e.id}`, name: e.name, quantity: null, unit: '', recipes: [], extraId: e.id }),
+          (e): ShoppingItem => ({
+            key: `extra:${e.id}`,
+            name: e.name,
+            quantity: null,
+            unit: '',
+            recipes: [],
+            extraId: e.id,
+            staple: household?.staples.find((s) => s.id === e.staple_id)?.name,
+          }),
         ),
       ].sort((a, b) => a.name.localeCompare(b.name, 'nl')),
-    [meals, extras],
+    [meals, extras, household?.staples],
   );
   const open = items.filter((i) => !checked.has(i.key));
   const done = items.filter((i) => checked.has(i.key));
   // What's still to get, per aisle in the order you walk through the shop.
-  const aisles = shopAisles.map((a) => ({ aisle: a, items: open.filter((i) => aisleOf(i.name, overrides, shopAisles) === a.key) })).filter(
+  // From the vaste boodschappen, "Thee rooibos" goes where "Thee" goes, unless it was moved itself.
+  const aisleOfItem = (i: ShoppingItem) =>
+    aisleOf(i.staple && !overrides[i.name.trim().toLowerCase()] ? i.staple : i.name, overrides, shopAisles);
+  const aisles = shopAisles.map((a) => ({ aisle: a, items: open.filter((i) => aisleOfItem(i) === a.key) })).filter(
     (group) => group.items.length > 0,
   );
 
@@ -218,6 +229,8 @@ export default function Shopping() {
           onChangeText={setNewExtra}
           onSubmitEditing={addExtra}
           submitBehavior="submit"
+          // The web ignores submitBehavior and leaves the field after Enter without this.
+          blurOnSubmit={false}
           returnKeyType="done"
           placeholder="Iets toevoegen, bijv. melk"
           placeholderTextColor={colors.placeholder}
@@ -233,6 +246,21 @@ export default function Shopping() {
         </Pressable>
       </View>
       {extraError && <Text style={styles.extraError}>{extraError}</Text>}
+      <Pressable
+        onPress={() => router.push('/staples')}
+        style={({ pressed }) => [styles.staplesButton, pressed && { opacity: 0.6 }]}
+      >
+        <Ionicons name="star" size={18} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.staplesTitle}>Vaste boodschappen</Text>
+          <Text style={styles.staplesText}>
+            {household?.staples.length
+              ? 'Loop je vaste lijst langs: wat is er nodig deze week?'
+              : 'Zet hier wat jullie vaak kopen, en loop het elke week langs'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 
@@ -356,7 +384,7 @@ export default function Shopping() {
                 </Pressable>
               )}
               {shopAisles.map((a) => {
-                const current = moving ? aisleOf(moving.name, overrides, shopAisles) === a.key : false;
+                const current = moving ? aisleOfItem(moving) === a.key : false;
                 return (
                   <Pressable
                     key={a.key}
@@ -525,8 +553,22 @@ const styles = StyleSheet.create({
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(1), marginLeft: spacing(9), marginTop: 2 },
   note: { flex: 1, fontSize: 13, fontStyle: 'italic', color: colors.accent },
   addRow: { flexDirection: 'row', gap: spacing(2) },
+  staplesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(3),
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(3),
+    marginTop: spacing(1),
+  },
+  staplesTitle: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  staplesText: { fontSize: 13, color: colors.textMuted },
   addInput: {
     flex: 1,
+    // On the web a text field won't shrink below its default width otherwise (narrow phones).
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
