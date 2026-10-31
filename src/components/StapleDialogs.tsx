@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/ui';
 import { colors, radius, spacing } from '@/lib/theme';
+import type { Staple } from '@/lib/types';
 
 /** A centred sheet over a dimmed screen; tapping next to it closes it. */
 function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: ReactNode }) {
@@ -11,7 +12,9 @@ function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () =
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
-          {children}
+          <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -136,52 +139,216 @@ export function PasteListDialog({
   );
 }
 
+/** − 1 +: how many. */
+export function Stepper({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
+  return (
+    <View style={styles.stepper}>
+      <Pressable
+        onPress={() => onChange(Math.max(1, value - 1))}
+        disabled={value <= 1}
+        hitSlop={4}
+        accessibilityLabel={`Minder ${label}`}
+        style={({ pressed }) => [styles.stepButton, (pressed || value <= 1) && { opacity: 0.4 }]}
+      >
+        <Ionicons name="remove" size={14} color={colors.text} />
+      </Pressable>
+      <Text style={styles.stepValue}>{value}</Text>
+      <Pressable
+        onPress={() => onChange(value + 1)}
+        hitSlop={4}
+        accessibilityLabel={`Meer ${label}`}
+        style={({ pressed }) => [styles.stepButton, pressed && { opacity: 0.4 }]}
+      >
+        <Ionicons name="add" size={14} color={colors.text} />
+      </Pressable>
+    </View>
+  );
+}
+
 /**
- * One product on the fixed list: change its name, or take it off the list for good (when you
- * don't buy it regularly any more). Taking it off asks once more, inside the dialog.
+ * Nodig for a product whose kind changes every week (Thee, Vleeswaren): type which ones this week,
+ * with how many of each. Without a kind it just goes on the list as it is.
+ */
+export function KindsDialog({
+  staple,
+  onClose,
+  onConfirm,
+}: {
+  /** The product, or null when the dialog is closed. */
+  staple: Staple | null;
+  onClose: () => void;
+  /** What goes on the shopping list: the kinds, or the product itself. */
+  onConfirm: (lines: { name: string; quantity: number }[]) => void;
+}) {
+  return (
+    <Sheet visible={staple != null} onClose={onClose}>
+      {staple != null && <KindsDialogContent key={staple.id} staple={staple} onClose={onClose} onConfirm={onConfirm} />}
+    </Sheet>
+  );
+}
+
+function KindsDialogContent({
+  staple,
+  onClose,
+  onConfirm,
+}: {
+  staple: Staple;
+  onClose: () => void;
+  onConfirm: (lines: { name: string; quantity: number }[]) => void;
+}) {
+  const [lines, setLines] = useState<{ name: string; quantity: number }[]>([]);
+  const [kind, setKind] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const input = useRef<TextInput>(null);
+
+  function addLine() {
+    const name = kind.trim();
+    if (!name) return;
+    const same = lines.findIndex((l) => l.name.toLowerCase() === name.toLowerCase());
+    setLines(
+      same === -1
+        ? [...lines, { name, quantity }]
+        : lines.map((l, i) => (i === same ? { ...l, quantity: l.quantity + quantity } : l)),
+    );
+    setKind('');
+    setQuantity(1);
+    input.current?.focus();
+  }
+
+  function confirm() {
+    // What's still in the field counts too.
+    const name = kind.trim();
+    const all = name ? [...lines, { name, quantity }] : lines;
+    onConfirm(all.length ? all : [{ name: staple.name, quantity }]);
+  }
+
+  const count = lines.reduce((sum, l) => sum + l.quantity, 0) + (kind.trim() ? quantity : 0);
+
+  return (
+    <>
+      <Text style={styles.title}>{staple.name}: welke deze week?</Text>
+      <Text style={styles.hint}>Typ de soort en tik op Erbij. Nog een soort? Typ de volgende.</Text>
+      {lines.map((line, i) => (
+        <View key={line.name} style={styles.line}>
+          <Ionicons name="checkmark" size={16} color={colors.accent} />
+          <Text style={styles.lineName} numberOfLines={1}>
+            {line.name}
+          </Text>
+          <Stepper
+            value={line.quantity}
+            onChange={(n) => setLines(lines.map((l, j) => (j === i ? { ...l, quantity: n } : l)))}
+            label={line.name}
+          />
+          <Pressable
+            onPress={() => setLines(lines.filter((_, j) => j !== i))}
+            hitSlop={8}
+            accessibilityLabel={`${line.name} weghalen`}
+          >
+            <Ionicons name="close" size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
+      ))}
+      <View style={styles.inlineRow}>
+        <TextInput
+          ref={input}
+          value={kind}
+          onChangeText={setKind}
+          onSubmitEditing={addLine}
+          submitBehavior="submit"
+          // The web ignores submitBehavior and leaves the field after Enter without this.
+          blurOnSubmit={false}
+          autoFocus
+          returnKeyType="done"
+          placeholder={lines.length ? 'Nog een soort' : `Soort, bijv. ${staple.name.toLowerCase() === 'thee' ? 'rooibos' : 'ham'}`}
+          placeholderTextColor={colors.placeholder}
+          style={[styles.input, styles.inlineInput]}
+        />
+        <Stepper value={quantity} onChange={setQuantity} label={kind.trim() || staple.name} />
+      </View>
+      <View style={styles.actions}>
+        <Button title="Erbij" icon="add" variant="secondary" onPress={addLine} disabled={!kind.trim()} />
+        <Button
+          title={count ? `Op de lijst (${count})` : `Gewoon ${staple.name.toLowerCase()}`}
+          icon="checkmark"
+          onPress={confirm}
+        />
+      </View>
+    </>
+  );
+}
+
+/**
+ * One product on the fixed list: change its name, choose whether Nodig asks for the kind, put it
+ * in another aisle, or take it off the list for good (when you don't buy it regularly any more).
+ * Taking it off asks once more, inside the dialog.
  */
 export function StapleDialog({
-  name,
+  staple,
+  aisleLabel,
   onClose,
-  onRename,
+  onSave,
+  onMoveAisle,
   onRemove,
 }: {
   /** The product, or null when the dialog is closed. */
-  name: string | null;
+  staple: Staple | null;
+  /** The aisle it's in now. */
+  aisleLabel: string;
   onClose: () => void;
-  onRename: (name: string) => void;
+  onSave: (staple: Staple) => void;
+  /** Opens the aisle picker (after this dialog closes). */
+  onMoveAisle: () => void;
   onRemove: () => void;
 }) {
   return (
-    <Sheet visible={name != null} onClose={onClose}>
-      {name != null && <StapleDialogContent key={name} name={name} onClose={onClose} onRename={onRename} onRemove={onRemove} />}
+    <Sheet visible={staple != null} onClose={onClose}>
+      {staple != null && (
+        <StapleDialogContent
+          key={staple.id}
+          staple={staple}
+          aisleLabel={aisleLabel}
+          onClose={onClose}
+          onSave={onSave}
+          onMoveAisle={onMoveAisle}
+          onRemove={onRemove}
+        />
+      )}
     </Sheet>
   );
 }
 
 function StapleDialogContent({
-  name,
+  staple,
+  aisleLabel,
   onClose,
-  onRename,
+  onSave,
+  onMoveAisle,
   onRemove,
 }: {
-  name: string;
+  staple: Staple;
+  aisleLabel: string;
   onClose: () => void;
-  onRename: (name: string) => void;
+  onSave: (staple: Staple) => void;
+  onMoveAisle: () => void;
   onRemove: () => void;
 }) {
-  const [text, setText] = useState(name);
+  const [text, setText] = useState(staple.name);
+  const [askKind, setAskKind] = useState(!!staple.askKind);
   const [confirming, setConfirming] = useState(false);
 
   function save() {
-    if (text.trim() && text.trim() !== name) onRename(text.trim());
+    const name = text.trim();
+    if (!name) return;
+    if (name !== staple.name || askKind !== !!staple.askKind) {
+      onSave({ id: staple.id, name, ...(askKind ? { askKind: true } : {}) });
+    }
     onClose();
   }
 
   if (confirming) {
     return (
       <>
-        <Text style={styles.title}>{name} van de vaste lijst halen?</Text>
+        <Text style={styles.title}>{staple.name} van de vaste lijst halen?</Text>
         <Text style={styles.hint}>
           Je ziet het dan niet meer bij de vaste boodschappen. Wat deze week al op het boodschappenlijstje staat, blijft
           daar staan.
@@ -196,16 +363,43 @@ function StapleDialogContent({
 
   return (
     <>
-      <Text style={styles.title}>{name}</Text>
-      <Text style={styles.hint}>Naam</Text>
+      <Text style={styles.title}>{staple.name}</Text>
+      <Text style={styles.label}>Naam</Text>
       <TextInput
         value={text}
         onChangeText={setText}
-        onSubmitEditing={save}
         returnKeyType="done"
         placeholderTextColor={colors.placeholder}
-        style={[styles.input, { marginTop: -spacing(1) }]}
+        style={[styles.input, { marginTop: -spacing(2) }]}
       />
+
+      <Pressable
+        onPress={() => setAskKind(!askKind)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: askKind }}
+        style={({ pressed }) => [styles.option, pressed && { opacity: 0.6 }]}
+      >
+        <Ionicons
+          name={askKind ? 'checkbox' : 'square-outline'}
+          size={22}
+          color={askKind ? colors.accent : colors.textMuted}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.optionTitle}>Soort kiezen bij Nodig</Text>
+          <Text style={styles.optionText}>
+            Voor wat elke week anders is, zoals thee of vleeswaren: dan typ je bij Nodig welke (bijv. rooibos).
+          </Text>
+        </View>
+      </Pressable>
+
+      <Pressable onPress={onMoveAisle} style={({ pressed }) => [styles.aisleRow, pressed && { opacity: 0.6 }]}>
+        <Text style={styles.label}>Pad</Text>
+        <Text style={styles.aisleValue} numberOfLines={1}>
+          {aisleLabel}
+        </Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
+
       <View style={styles.actions}>
         <Button title="Annuleren" variant="ghost" onPress={onClose} />
         <Button title="Opslaan" onPress={save} disabled={!text.trim()} />
@@ -226,12 +420,12 @@ const styles = StyleSheet.create({
   sheet: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing(4),
-    gap: spacing(3),
     width: '100%',
     maxWidth: 440,
+    maxHeight: '90%',
     alignSelf: 'center',
   },
+  sheetContent: { padding: spacing(4), gap: spacing(3) },
   title: { fontSize: 17, fontWeight: '800', color: colors.text },
   hint: { fontSize: 13, color: colors.textMuted, marginTop: -spacing(2) },
   input: {
@@ -257,4 +451,49 @@ const styles = StyleSheet.create({
     paddingTop: spacing(3),
   },
   removeText: { fontSize: 15, fontWeight: '600', color: colors.danger },
+  label: { fontSize: 13, fontWeight: '700', color: colors.text },
+  inlineRow: { flexDirection: 'row', gap: spacing(2), marginTop: -spacing(1) },
+  // On the web a text field won't shrink below its default width otherwise (narrow phones).
+  inlineInput: { flex: 1, minWidth: 0, paddingVertical: spacing(2), fontSize: 15 },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(3),
+    paddingVertical: spacing(2),
+  },
+  lineName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: colors.text },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing(2),
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing(3),
+  },
+  optionTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  optionText: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  aisleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing(3),
+  },
+  aisleValue: { flex: 1, textAlign: 'right', fontSize: 14, color: colors.textMuted },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  stepButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepValue: { minWidth: 16, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
 });

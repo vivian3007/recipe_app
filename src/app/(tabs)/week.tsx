@@ -342,8 +342,10 @@ export default function Week() {
                 ]}
               >
                 <View style={styles.dayHeader}>
-                  <Text style={styles.dayName}>{name}</Text>
-                  <Text style={styles.dayDate}>
+                  <Text style={styles.dayName} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <Text style={styles.dayDate} numberOfLines={1}>
                     {isToday ? 'Vandaag · ' : ''}
                     {formatShort(dateOfDay(weekStart, day))}
                   </Text>
@@ -351,7 +353,9 @@ export default function Week() {
                   {chooserName && (
                     <View style={styles.badge}>
                       <View style={[styles.dot, { backgroundColor: memberColor(chooser, members) }]} />
-                      <Text style={styles.badgeText}>{chooserName} kiest</Text>
+                      <Text style={styles.badgeText} numberOfLines={1}>
+                        {chooserName} kiest
+                      </Text>
                     </View>
                   )}
                   {hasMeals && (
@@ -496,9 +500,12 @@ const styles = StyleSheet.create({
   today: { borderColor: colors.primary },
   target: { borderColor: colors.accent, borderStyle: 'dashed', backgroundColor: colors.accentSoft },
   dayHeader: { height: HEADER_H, flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
-  dayName: { fontSize: 16, fontWeight: '800', color: colors.text },
-  dayDate: { fontSize: 13, color: colors.textMuted },
+  dayName: { flexShrink: 0, fontSize: 16, fontWeight: '800', color: colors.text },
+  dayDate: { flexShrink: 0, fontSize: 13, color: colors.textMuted },
+  // On a narrow phone who chooses gets shortened, so Erbij always stays inside the card.
   badge: {
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing(1.5),
@@ -508,8 +515,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(1),
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  badgeText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  badgeText: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: colors.text },
   addMore: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
@@ -559,7 +567,7 @@ const styles = StyleSheet.create({
   adjustedText: { fontSize: 12, fontWeight: '600', color: colors.primaryDark, flexShrink: 1 },
   mealActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   icons: { flexDirection: 'row', gap: spacing(1) },
-  iconButton: { alignItems: 'center', gap: 1, minWidth: 48 },
+  iconButton: { alignItems: 'center', gap: 1, minWidth: 42 },
   iconLabel: { fontSize: 10, color: colors.textMuted },
   empty: {
     flexDirection: 'row',

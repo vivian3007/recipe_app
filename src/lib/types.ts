@@ -26,8 +26,11 @@ export type Household = {
   staples: Staple[];
 };
 
-/** A product on the family's fixed list (Vaste boodschappen). */
-export type Staple = { id: string; name: string };
+/**
+ * A product on the family's fixed list (Vaste boodschappen). With askKind, Nodig asks which kind
+ * this week (Thee: rooibos), because that's different every week.
+ */
+export type Staple = { id: string; name: string; askKind?: boolean };
 
 /**
  * An AVG choice the family added themselves (the amount is for one person), or with `hidden`
@@ -157,6 +160,8 @@ export type ShoppingExtra = {
   name: string;
   /** The staple it was added from, if any. */
   staple_id?: string | null;
+  /** How many, when more than one. */
+  quantity?: number | null;
 };
 
 export type RecipeInput = {

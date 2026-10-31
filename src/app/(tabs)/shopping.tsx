@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Animated,
   LayoutAnimation,
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -20,41 +19,30 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, EmptyState, Loading } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { AisleEditor } from '@/components/AisleEditor';
-import { aisleOf, familyAisles, guessAisle, withNewAisle, type AisleSetup } from '@/lib/aisles';
-import {
-  addShoppingExtra,
-  listShoppingChecks,
-  listShoppingExtras,
-  removeShoppingExtra,
-  saveAisleSetup,
-  saveAisleOverrides,
-  setShoppingCheck,
-} from '@/lib/api';
-import { dayShort, weekLabel } from '@/lib/dates';
-import { notify } from '@/lib/dialogs';
+import { AislePicker } from '@/components/AislePicker';
+import { aisleOf } from '@/lib/aisles';
+import { addShoppingExtra, listShoppingChecks, listShoppingExtras, removeShoppingExtra, setShoppingCheck } from '@/lib/api';
+import { dateOfDay, dayShort, formatShort, weekLabel } from '@/lib/dates';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
 import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import type { ShoppingExtra } from '@/lib/types';
+import { useAisles } from '@/lib/useAisles';
 import { useWeekPlan } from '@/lib/useWeekPlan';
+
+/** Recipe ingredients someone took off this week's list are kept as a check with this prefix. */
+const HIDDEN = 'weg:';
 
 export default function Shopping() {
   useWeekFromLink();
   const weekStart = useSelectedWeek();
-  const { profile, household, refresh } = useSession();
-  // Moved products show up in their new aisle straight away, also while saving.
-  const [aisleDraft, setAisleDraft] = useState<Record<string, string> | null>(null);
-  const overrides = aisleDraft ?? household?.aisle_overrides ?? {};
+  const { profile, household } = useSession();
+  const { aisles: shopAisles, setup, overrides, moveTo, saveSetup, moveToNewAisle } = useAisles();
   // The product whose aisle is being chosen.
   const [moving, setMoving] = useState<ShoppingItem | null>(null);
-  // Changed aisles show straight away, also while saving.
-  const [setupDraft, setSetupDraft] = useState<AisleSetup | null>(null);
-  const setup = setupDraft ?? household?.aisle_setup ?? {};
-  const shopAisles = familyAisles(setup);
   const [editingAisles, setEditingAisles] = useState(false);
-  // A new aisle typed in the "which aisle" sheet.
-  const [newAisle, setNewAisle] = useState('');
+  const [showHidden, setShowHidden] = useState(false);
   const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ShoppingExtra[]>([]);
@@ -88,7 +76,7 @@ export default function Shopping() {
           (e): ShoppingItem => ({
             key: `extra:${e.id}`,
             name: e.name,
-            quantity: null,
+            quantity: e.quantity ?? null,
             unit: '',
             recipes: [],
             extraId: e.id,
@@ -98,8 +86,11 @@ export default function Shopping() {
       ].sort((a, b) => a.name.localeCompare(b.name, 'nl')),
     [meals, extras, household?.staples],
   );
-  const open = items.filter((i) => !checked.has(i.key));
-  const done = items.filter((i) => checked.has(i.key));
+  // Recipe ingredients you don't need this week (you still have them, say): out of sight, but they can go back.
+  const hidden = items.filter((i) => checked.has(HIDDEN + i.key));
+  const visible = items.filter((i) => !checked.has(HIDDEN + i.key));
+  const open = visible.filter((i) => !checked.has(i.key));
+  const done = visible.filter((i) => checked.has(i.key));
   // What's still to get, per aisle in the order you walk through the shop.
   // From the vaste boodschappen, "Thee rooibos" goes where "Thee" goes, unless it was moved itself.
   const aisleOfItem = (i: ShoppingItem) =>
@@ -108,70 +99,33 @@ export default function Shopping() {
     (group) => group.items.length > 0,
   );
 
-  /** Puts a product in another aisle, for the whole family and every week; null: back to the guess. */
-  async function moveTo(item: ShoppingItem, key: string | null) {
-    setMoving(null);
-    if (!household) return;
-    const name = item.name.trim().toLowerCase();
-    const next = { ...overrides };
-    if (key) next[name] = key;
-    else delete next[name];
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setAisleDraft(next);
-    try {
-      await saveAisleOverrides(household.id, next);
-      await refresh();
-    } catch (e) {
-      notify('Verplaatsen mislukt', (e as Error).message);
-    } finally {
-      setAisleDraft(null);
-    }
-  }
-
-  /** Saves the family's aisles: order, names and their own aisles. */
-  async function saveSetup(next: AisleSetup) {
-    if (!household) return;
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSetupDraft(next);
-    try {
-      await saveAisleSetup(household.id, next);
-      await refresh();
-    } catch (e) {
-      notify('Paden opslaan mislukt', (e as Error).message);
-    } finally {
-      setSetupDraft(null);
-    }
-  }
-
-  /** Makes a new aisle and puts the product in it. */
-  async function moveToNewAisle(item: ShoppingItem) {
-    const label = newAisle.trim();
-    if (!label) return;
-    setNewAisle('');
-    const added = withNewAisle(setup, shopAisles, label);
-    await saveSetup(added.setup);
-    await moveTo(item, added.key);
-  }
-
-  function closeMoving() {
-    setMoving(null);
-    setNewAisle('');
-  }
-
-  async function toggle(item: ShoppingItem) {
+  async function setCheck(key: string, next: boolean) {
     if (!plan) return;
-    const next = !checked.has(item.key);
     setChecked((prev) => {
       const copy = new Set(prev);
-      if (next) copy.add(item.key);
-      else copy.delete(item.key);
+      if (next) copy.add(key);
+      else copy.delete(key);
       return copy;
     });
     try {
-      await setShoppingCheck(plan.id, item.key, next);
+      await setShoppingCheck(plan.id, key, next);
     } catch {
       loadChecks();
     }
+  }
+
+  const toggle = (item: ShoppingItem) => setCheck(item.key, !checked.has(item.key));
+
+  /** Off the list: what was added by hand is deleted, a recipe ingredient is hidden for this week. */
+  function remove(item: ShoppingItem) {
+    if (item.extraId) return removeExtra(item);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCheck(HIDDEN + item.key, true);
+  }
+
+  function putBack(item: ShoppingItem) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setCheck(HIDDEN + item.key, false);
   }
 
   async function addExtra() {
@@ -290,9 +244,17 @@ export default function Shopping() {
               <View style={styles.mealsBox}>
                 {meals.map((m) => (
                   <View key={m.id}>
-                    <Text style={styles.mealLine} numberOfLines={1}>
-                      <Text style={{ fontWeight: '700' }}>{dayShort(weekStart, m.day)}</Text>  {m.recipe.title} · {m.servings} pers.
-                    </Text>
+                    {/* The date in its own column, so all dishes start at the same spot. */}
+                    <View style={styles.mealRow}>
+                      <Text style={styles.mealDate}>
+                        {dayShort(weekStart, m.day)} {formatShort(dateOfDay(weekStart, m.day))}
+                      </Text>
+                      <Text style={styles.mealSeparator}>–</Text>
+                      <Text style={styles.mealLine} numberOfLines={1}>
+                        {m.recipe.title}
+                      </Text>
+                      <Text style={styles.mealServings}>{m.servings} pers.</Text>
+                    </View>
                     {m.note && (
                       <View style={styles.noteRow}>
                         <Ionicons name="chatbubble-ellipses-outline" size={13} color={colors.accent} />
@@ -339,7 +301,7 @@ export default function Shopping() {
                       checked={false}
                       onPress={() => toggle(item)}
                       onMove={() => setMoving(item)}
-                      onRemove={item.extraId ? () => removeExtra(item) : undefined}
+                      onRemove={() => remove(item)}
                     />
                   ))}
                 </View>
@@ -356,70 +318,52 @@ export default function Shopping() {
                       item={item}
                       checked
                       onPress={() => toggle(item)}
-                      onRemove={item.extraId ? () => removeExtra(item) : undefined}
+                      onRemove={() => remove(item)}
                     />
                   ))}
                 </View>
               </>
             )}
+
+            {hidden.length > 0 && (
+              <View style={{ gap: spacing(2) }}>
+                <Pressable onPress={() => setShowHidden(!showHidden)} hitSlop={6} style={styles.hiddenHeader}>
+                  <Text style={styles.hiddenTitle}>Weggehaald deze week ({hidden.length})</Text>
+                  <Ionicons name={showHidden ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
+                </Pressable>
+                {showHidden &&
+                  hidden.map((item) => (
+                    <View key={item.key} style={styles.hiddenRow}>
+                      <Text style={styles.hiddenName} numberOfLines={1}>
+                        {[formatAmount(item.quantity, item.unit), item.name].filter(Boolean).join(' ')}
+                      </Text>
+                      <Pressable onPress={() => putBack(item)} hitSlop={8} style={styles.putBack}>
+                        <Ionicons name="arrow-undo-outline" size={14} color={colors.textMuted} />
+                        <Text style={styles.putBackText}>Terugzetten</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
 
-      <Modal visible={!!moving} transparent animationType="fade" onRequestClose={closeMoving}>
-        <Pressable style={styles.backdrop} onPress={closeMoving}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>In welk gangpad ligt {moving?.name}?</Text>
-            <Text style={styles.sheetHint}>De app onthoudt het voor het hele gezin.</Text>
-            <ScrollView style={{ maxHeight: 420 }}>
-              {moving && overrides[moving.name.trim().toLowerCase()] && (
-                <Pressable
-                  onPress={() => moveTo(moving, null)}
-                  style={({ pressed }) => [styles.sheetRow, pressed && { opacity: 0.6 }]}
-                >
-                  <Ionicons name="sparkles-outline" size={18} color={colors.textMuted} />
-                  <Text style={styles.sheetLabel}>
-                    Automatisch ({shopAisles.find((a) => a.key === guessAisle(moving.name))?.label})
-                  </Text>
-                </Pressable>
-              )}
-              {shopAisles.map((a) => {
-                const current = moving ? aisleOfItem(moving) === a.key : false;
-                return (
-                  <Pressable
-                    key={a.key}
-                    onPress={() => moving && moveTo(moving, a.key)}
-                    style={({ pressed }) => [styles.sheetRow, current && styles.sheetRowActive, pressed && { opacity: 0.6 }]}
-                  >
-                    <Ionicons name={a.icon} size={18} color={current ? colors.accent : colors.textMuted} />
-                    <Text style={[styles.sheetLabel, current && { fontWeight: '700' }]}>{a.label}</Text>
-                    {current && <Ionicons name="checkmark" size={18} color={colors.accent} />}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            <View style={styles.addRow}>
-              <TextInput
-                value={newAisle}
-                onChangeText={setNewAisle}
-                onSubmitEditing={() => moving && moveToNewAisle(moving)}
-                submitBehavior="submit"
-                returnKeyType="done"
-                placeholder="Of een nieuw pad, bijv. Dierenvoer"
-                placeholderTextColor={colors.placeholder}
-                style={[styles.addInput, styles.newAisleInput]}
-              />
-              <Button
-                title="Maken"
-                icon="add"
-                variant="secondary"
-                onPress={() => moving && moveToNewAisle(moving)}
-                disabled={!newAisle.trim()}
-              />
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <AislePicker
+        name={moving?.name ?? null}
+        current={moving ? aisleOfItem(moving) : null}
+        moved={!!moving && !!overrides[moving.name.trim().toLowerCase()]}
+        aisles={shopAisles}
+        onPick={(key) => {
+          if (moving) moveTo(moving.name, key);
+          setMoving(null);
+        }}
+        onNewAisle={(label) => {
+          if (moving) moveToNewAisle(moving.name, label);
+          setMoving(null);
+        }}
+        onClose={() => setMoving(null)}
+      />
 
       <AisleEditor
         visible={editingAisles}
@@ -433,6 +377,10 @@ export default function Shopping() {
 }
 
 const useNativeDriver = Platform.OS !== 'web';
+
+// The week's dishes above the list: "wo 28 okt – Pasta pesto", with the dishes lined up.
+const MEAL_DATE_W = 76;
+const MEAL_SEPARATOR_W = 16;
 
 /**
  * Ticking off: the check pops in and the item is struck through, then the row fades and slides
@@ -450,7 +398,7 @@ function Row({
   onPress: () => void;
   /** Choose another aisle for the product. */
   onMove?: () => void;
-  /** Only for things added by hand; recipe ingredients come and go with the week plan. */
+  /** Off this week's list. */
   onRemove?: () => void;
 }) {
   const amount = formatAmount(item.quantity, item.unit);
@@ -504,7 +452,13 @@ function Row({
             {item.name}
           </Text>
           <Text style={styles.itemRecipes} numberOfLines={1}>
-            {item.extraId ? 'Zelf toegevoegd' : item.recipes.join(', ')}
+            {item.staple && item.staple !== item.name
+              ? item.staple
+              : item.staple
+                ? 'Vaste boodschappen'
+                : item.extraId
+                  ? 'Zelf toegevoegd'
+                  : item.recipes.join(', ')}
           </Text>
         </View>
         {onMove && (
@@ -514,7 +468,7 @@ function Row({
         )}
         {onRemove && (
           <Pressable onPress={onRemove} hitSlop={10} accessibilityLabel={`${item.name} van het lijstje halen`}>
-            <Ionicons name="close" size={20} color={colors.textMuted} />
+            <Ionicons name="close" size={18} color={colors.placeholder} />
           </Pressable>
         )}
       </Pressable>
@@ -526,31 +480,20 @@ const styles = StyleSheet.create({
   container: { padding: spacing(4), gap: spacing(3), paddingBottom: spacing(10) },
   aisleHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(1) },
   aisleTitle: { fontSize: 14, fontWeight: '700', color: colors.accent, textTransform: 'uppercase', letterSpacing: 0.5 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: spacing(5) },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing(4),
-    gap: spacing(2),
-    width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
-  },
-  sheetTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  sheetHint: { fontSize: 13, color: colors.textMuted, marginBottom: spacing(1) },
-  sheetRow: {
+  mealsBox: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: spacing(4), gap: spacing(1.5) },
+  mealRow: { flexDirection: 'row', alignItems: 'baseline' },
+  mealDate: { width: MEAL_DATE_W, fontSize: 14, fontWeight: '700', color: colors.text },
+  mealSeparator: { width: MEAL_SEPARATOR_W, fontSize: 14, color: colors.textMuted },
+  mealLine: { flex: 1, minWidth: 0, fontSize: 14, color: colors.text },
+  mealServings: { width: 52, textAlign: 'right', fontSize: 13, color: colors.textMuted },
+  noteRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing(3),
-    paddingVertical: spacing(3),
-    paddingHorizontal: spacing(2),
-    borderRadius: radius.md,
+    alignItems: 'flex-start',
+    gap: spacing(1),
+    marginLeft: MEAL_DATE_W + MEAL_SEPARATOR_W,
+    marginRight: 52,
+    marginTop: 2,
   },
-  sheetRowActive: { backgroundColor: colors.accentSoft },
-  sheetLabel: { flex: 1, fontSize: 15, color: colors.text },
-  mealsBox: { backgroundColor: colors.accentSoft, borderRadius: radius.lg, padding: spacing(4), gap: spacing(1) },
-  mealLine: { fontSize: 14, color: colors.text },
-  noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing(1), marginLeft: spacing(9), marginTop: 2 },
   note: { flex: 1, fontSize: 13, fontStyle: 'italic', color: colors.accent },
   addRow: { flexDirection: 'row', gap: spacing(2) },
   staplesButton: {
@@ -590,7 +533,6 @@ const styles = StyleSheet.create({
   extraError: { color: colors.danger, fontSize: 13 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing(1) },
   headerActions: { flexDirection: 'row', gap: spacing(2) },
-  newAisleInput: { paddingVertical: spacing(2.5), fontSize: 15 },
   moveHint: { fontSize: 13, color: colors.textMuted, marginTop: -spacing(1) },
   count: { fontSize: 17, fontWeight: '800', color: colors.text },
   share: {
@@ -624,4 +566,10 @@ const styles = StyleSheet.create({
   checked: { textDecorationLine: 'line-through', color: colors.textMuted },
   itemRecipes: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   doneTitle: { fontSize: 15, fontWeight: '700', color: colors.textMuted, marginTop: spacing(2) },
+  hiddenHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing(1), marginTop: spacing(2) },
+  hiddenTitle: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  hiddenRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), paddingHorizontal: spacing(1) },
+  hiddenName: { flex: 1, fontSize: 14, color: colors.textMuted, textDecorationLine: 'line-through' },
+  putBack: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: spacing(1) },
+  putBackText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
 });

@@ -370,7 +370,7 @@ export async function listShoppingExtras(weekPlanId: string): Promise<ShoppingEx
   return check(
     await supabase
       .from('shopping_extras')
-      .select('id, week_plan_id, name, staple_id')
+      .select('id, week_plan_id, name, staple_id, quantity')
       .eq('week_plan_id', weekPlanId)
       .order('created_at'),
   ) as ShoppingExtra[];
@@ -382,12 +382,19 @@ export async function addShoppingExtra(
   userId: string,
   name: string,
   stapleId?: string,
+  quantity?: number,
 ) {
   const plan = await ensureWeekPlan(householdId, weekStart);
   check(
     await supabase
       .from('shopping_extras')
-      .insert({ week_plan_id: plan.id, name, created_by: userId, staple_id: stapleId ?? null }),
+      .insert({
+        week_plan_id: plan.id,
+        name,
+        created_by: userId,
+        staple_id: stapleId ?? null,
+        quantity: quantity && quantity > 1 ? quantity : null,
+      }),
   );
 }
 

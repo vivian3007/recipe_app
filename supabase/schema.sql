@@ -116,6 +116,8 @@ create table public.shopping_extras (
   name text not null check (length(trim(name)) > 0),
   -- The staple (households.staples) it was added from, if any.
   staple_id text,
+  -- How many, when more than one (from the vaste boodschappen).
+  quantity numeric,
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now()
 );

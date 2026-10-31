@@ -718,10 +718,20 @@ export async function addShoppingExtra(
   _userId: string,
   name: string,
   stapleId?: string,
+  quantity?: number,
 ) {
   mutate((s) => {
     const plan = ensurePlan(s, weekStart);
-    s.extras = [...(s.extras ?? []), { id: newId(), week_plan_id: plan.id, name, staple_id: stapleId ?? null }];
+    s.extras = [
+      ...(s.extras ?? []),
+      {
+        id: newId(),
+        week_plan_id: plan.id,
+        name,
+        staple_id: stapleId ?? null,
+        quantity: quantity && quantity > 1 ? quantity : null,
+      },
+    ];
   });
 }
 
