@@ -104,6 +104,10 @@ Eenmalig instellen:
 7. In **Boodschappen** staat automatisch alles wat je nodig hebt, inclusief je aanpassingen, per supermarktpad. Heb je thuis nog wat liggen? Tik op het aantal om het voor deze week te veranderen (2 mozzarella wordt 1). Heb je iets al in huis, tik dan op het kruisje: het gaat deze week van het lijstje (onderaan bij **Weggehaald** zet je het terug). Staat iets in het verkeerde pad, tik dan op het pijltjesknopje; met **Paden** zet je de paden in de volgorde van je eigen supermarkt, geef je ze een andere naam of maak je er zelf een bij.
 8. Wat jullie vaak kopen zet je bij **Vaste boodschappen** (plak gewoon je lijstje, elke regel wordt een product). Loop die elke week even langs: **Nodig** zet het op het boodschappenlijstje, **Niet nodig** slaat het deze week over; wat je hebt bekeken zakt naar **Bekeken** (met **Ongedaan**). Tik op een naam om die te veranderen, het product in een ander pad te zetten of het van de vaste lijst te halen. Koop je elke week een andere soort (vleeswaren, thee)? Zet dan **Soort kiezen bij Nodig** aan: bij **Nodig** typ je welke je deze week wilt (bijv. rooibos). Hoeveel je nodig hebt, verander je daarna op het boodschappenlijstje.
 
+## Zonder internet
+
+Zonder wifi of 4G blijft Weekmenu werken: je blijft ingelogd en ziet het weekplan en de boodschappenlijst van de laatste keer dat je internet had. Deze en volgende week worden daarvoor vanzelf op het toestel bewaard, bij het openen van de app. Vinkjes, aangepaste aantallen en weggehaalde producten worden bewaard en verstuurd zodra er weer internet is. Iets toevoegen, recepten en het weekplan veranderen kan alleen met internet. De web-app op de iPhone moet één keer met internet geopend zijn voordat hij ook zonder opent.
+
 ## Projectstructuur
 
 ```

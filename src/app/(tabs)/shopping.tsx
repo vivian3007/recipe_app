@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   LayoutAnimation,
@@ -21,16 +21,12 @@ import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { AisleEditor } from '@/components/AisleEditor';
 import { AislePicker } from '@/components/AislePicker';
 import { AmountDialog } from '@/components/AmountDialog';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { aisleOf } from '@/lib/aisles';
-import {
-  addShoppingExtra,
-  listShoppingChecks,
-  listShoppingExtras,
-  removeShoppingExtra,
-  setShoppingCheck,
-  setShoppingExtraQuantity,
-} from '@/lib/api';
+import { addShoppingExtra } from '@/lib/api';
 import { dateOfDay, dayShort, formatShort, weekLabel } from '@/lib/dates';
+import { onDataChanged, readCachedWeek } from '@/lib/offlineCache';
+import { changeShopping, fetchShoppingLists, withWaitingChanges } from '@/lib/offlineQueue';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
 import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -68,7 +64,7 @@ export default function Shopping() {
   const [showHidden, setShowHidden] = useState(false);
   // The product whose amount is being changed.
   const [changing, setChanging] = useState<ShoppingItem | null>(null);
-  const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);
+  const { plan, meals, savedAt, loading, error, reload } = useWeekPlan(weekStart);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ShoppingExtra[]>([]);
   const [newExtra, setNewExtra] = useState('');
@@ -76,15 +72,34 @@ export default function Shopping() {
   const [extraError, setExtraError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Which plan's ticks are on screen: what's on this device only shows when arriving at a plan.
+  const shownPlan = useRef<string | null>(null);
+
   const loadChecks = useCallback(async () => {
     if (!plan) {
+      shownPlan.current = null;
       setChecked(new Set());
       setExtras([]);
       return;
     }
-    const [checks, added] = await Promise.all([listShoppingChecks(plan.id), listShoppingExtras(plan.id)]);
-    setChecked(checks);
-    setExtras(added);
+    if (shownPlan.current !== plan.id) {
+      shownPlan.current = plan.id;
+      const stored = readCachedWeek(plan.week_start);
+      const lists = withWaitingChanges(plan.id, {
+        checks: new Set(stored?.plan?.id === plan.id ? stored.checks : []),
+        extras: stored?.plan?.id === plan.id ? stored.extras : [],
+      });
+      setChecked(lists.checks);
+      setExtras(lists.extras);
+    }
+    try {
+      const lists = await fetchShoppingLists(plan.week_start, plan.id);
+      if (shownPlan.current !== plan.id) return;
+      setChecked(lists.checks);
+      setExtras(lists.extras);
+    } catch {
+      // No internet: what's stored stays on screen.
+    }
   }, [plan]);
 
   useFocusEffect(
@@ -92,6 +107,8 @@ export default function Shopping() {
       loadChecks();
     }, [loadChecks]),
   );
+
+  useEffect(() => onDataChanged(loadChecks), [loadChecks]);
 
   const amounts = useMemo(() => changedAmounts(checked), [checked]);
   const items = useMemo(
@@ -128,7 +145,7 @@ export default function Shopping() {
     (group) => group.items.length > 0,
   );
 
-  async function setCheck(key: string, next: boolean) {
+  function setCheck(key: string, next: boolean) {
     if (!plan) return;
     setChecked((prev) => {
       const copy = new Set(prev);
@@ -136,11 +153,7 @@ export default function Shopping() {
       else copy.delete(key);
       return copy;
     });
-    try {
-      await setShoppingCheck(plan.id, key, next);
-    } catch {
-      loadChecks();
-    }
+    changeShopping(plan.week_start, { type: 'check', planId: plan.id, key, checked: next });
   }
 
   const toggle = (item: ShoppingItem) => setCheck(item.key, !checked.has(item.key));
@@ -153,21 +166,18 @@ export default function Shopping() {
   }
 
   /** A new amount for this week; null: back to what the recipes say (or one, when added by hand). */
-  async function setAmount(item: ShoppingItem, quantity: number | null) {
+  function setAmount(item: ShoppingItem, quantity: number | null) {
     const extra = extras.find((e) => e.id === item.extraId);
     if (extra) {
+      if (!plan) return;
       const next = quantity && quantity !== 1 ? quantity : null;
       setExtras((prev) => prev.map((e) => (e.id === extra.id ? { ...e, quantity: next } : e)));
-      try {
-        await setShoppingExtraQuantity(extra, next);
-      } catch {
-        loadChecks();
-      }
+      changeShopping(plan.week_start, { type: 'quantity', extra, quantity: next });
       return;
     }
     const old = amounts.get(item.key);
-    if (old) await setCheck(old.check, false);
-    if (quantity != null) await setCheck(`${AMOUNT}${quantity}:${item.key}`, true);
+    if (old) setCheck(old.check, false);
+    if (quantity != null) setCheck(`${AMOUNT}${quantity}:${item.key}`, true);
   }
 
   function putBack(item: ShoppingItem) {
@@ -184,7 +194,7 @@ export default function Shopping() {
       await addShoppingExtra(household.id, weekStart, profile.id, name);
       setNewExtra('');
       // Adding to an empty week creates its plan; reloading it then loads the extras too.
-      if (plan) setExtras(await listShoppingExtras(plan.id));
+      if (plan) await loadChecks();
       else await reload();
     } catch (e) {
       setExtraError(`Toevoegen lukte niet: ${(e as Error).message}`);
@@ -193,16 +203,12 @@ export default function Shopping() {
     }
   }
 
-  async function removeExtra(item: ShoppingItem) {
+  function removeExtra(item: ShoppingItem) {
     const extra = extras.find((e) => e.id === item.extraId);
-    if (!extra) return;
+    if (!extra || !plan) return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExtras((prev) => prev.filter((e) => e.id !== extra.id));
-    try {
-      await removeShoppingExtra(extra);
-    } catch {
-      loadChecks();
-    }
+    changeShopping(plan.week_start, { type: 'remove', extra });
   }
 
   function share() {
@@ -272,6 +278,7 @@ export default function Shopping() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        <OfflineBanner savedAt={savedAt} />
         <WeekSwitcher weekStart={weekStart} />
         {error && <Text style={{ color: colors.danger }}>{error}</Text>}
 

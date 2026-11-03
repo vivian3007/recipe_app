@@ -11,6 +11,13 @@ const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
  */
 export const isDemo = !supabaseUrl || !supabasePublishableKey || process.env.EXPO_PUBLIC_DEMO === '1';
 
+/** The request never reached the server. */
+export class OfflineError extends Error {
+  constructor() {
+    super('Geen internet. Probeer het straks opnieuw.');
+  }
+}
+
 // In demo mode the client is created with placeholders but never used.
 export const supabase = createClient(supabaseUrl ?? 'http://localhost', supabasePublishableKey ?? 'demo', {
   auth: {

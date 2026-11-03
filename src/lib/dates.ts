@@ -65,6 +65,13 @@ export function formatShort(d: Date): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
+/** "om 14:32" today, otherwise "3 nov om 14:32". */
+export function formatSavedAt(savedAt: number): string {
+  const d = new Date(savedAt);
+  const time = `om ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return toISODate(d) === toISODate(new Date()) ? time : `${formatShort(d)} ${time}`;
+}
+
 export function weekLabel(weekStart: string): string {
   const current = weekStartOf();
   if (weekStart === current) return 'Deze week';

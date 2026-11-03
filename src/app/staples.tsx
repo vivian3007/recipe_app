@@ -10,6 +10,7 @@ import { Button, EmptyState, Loading, type IconName } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { addShoppingExtra, listShoppingExtras, removeShoppingExtra, saveStaples, setStapleSkipped } from '@/lib/api';
 import { aisleOf } from '@/lib/aisles';
+import { readCachedWeek } from '@/lib/offlineCache';
 import { notify } from '@/lib/dialogs';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -70,7 +71,12 @@ export default function Staples() {
   const aisleOfStaple = (s: Staple) => aisleOf(s.name, overrides, aisles);
 
   const loadExtras = useCallback(async () => {
-    setExtras(plan ? await listShoppingExtras(plan.id) : []);
+    try {
+      setExtras(plan ? await listShoppingExtras(plan.id) : []);
+    } catch {
+      // No internet: show what's stored for this week.
+      setExtras((plan && readCachedWeek(plan.week_start)?.extras) ?? []);
+    }
   }, [plan]);
 
   useFocusEffect(

@@ -9,6 +9,7 @@ import { EnablePushBanner } from '@/components/EnablePushBanner';
 import { RecipeImage } from '@/components/RecipeCard';
 import { Loading, Stepper } from '@/components/ui';
 import { WeekReady } from '@/components/WeekReady';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { removeMeal, resetDayChoosers, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
 import { dateOfDay, dayName, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
@@ -71,7 +72,7 @@ export default function Week() {
   useWeekFromLink();
   const weekStart = useSelectedWeek();
   const { household, members, profile } = useSession();
-  const { plan, meals, setMeals, chooserOverrides, setChooserOverrides, loading, error, reload } =
+  const { plan, meals, setMeals, chooserOverrides, setChooserOverrides, savedAt, loading, error, reload } =
     useWeekPlan(weekStart);
   // Whoever's turn it is chooses the whole week, except on days changed for this week.
   const turn = rotationChooser(household, members, weekStart);
@@ -301,6 +302,7 @@ export default function Week() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <EnablePushBanner />
+        <OfflineBanner savedAt={savedAt} />
         <WeekSwitcher weekStart={weekStart} />
         <ChooserPlanner
           weekStart={weekStart}

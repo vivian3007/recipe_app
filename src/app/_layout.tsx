@@ -7,11 +7,13 @@ import { refreshPush, useOpenFromNotification } from '@/lib/push';
 import { SessionProvider, useSession } from '@/lib/session';
 import { isDemo } from '@/lib/supabase';
 import { useAppUpdates } from '@/lib/useAppUpdates';
+import { useOfflineSync } from '@/lib/useOfflineSync';
 import { colors } from '@/lib/theme';
 
 function RootNavigator() {
   const { loading, signedIn, household, profile } = useSession();
   useOpenFromNotification();
+  useOfflineSync();
   // Keeps this device's notification address with whoever is logged in.
   useEffect(() => {
     if (profile && !isDemo) refreshPush(profile.id).catch(() => {});

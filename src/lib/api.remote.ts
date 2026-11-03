@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import type { AisleSetup } from './aisles';
 import { base64ToArrayBuffer } from './base64';
-import { supabase } from './supabase';
+import { OfflineError, supabase } from './supabase';
 import { replaceTags } from './tags';
 import type {
   ChooserOverrides,
@@ -23,8 +23,8 @@ const RECIPE_FIELDS =
   'id, household_id, created_by, title, description, image_url, servings, prep_minutes, instructions, source_url, tags, created_at, author:profiles!recipes_created_by_fkey(display_name)';
 const INGREDIENT_FIELDS = 'recipe_ingredients(id, name, quantity, unit, position)';
 
-function check<T>(result: { data: T; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message);
+function check<T>(result: { data: T; error: { message: string } | null; status?: number }): T {
+  if (result.error) throw result.status === 0 ? new OfflineError() : new Error(result.error.message);
   return result.data;
 }
 
