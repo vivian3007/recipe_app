@@ -718,20 +718,10 @@ export async function addShoppingExtra(
   _userId: string,
   name: string,
   stapleId?: string,
-  quantity?: number,
 ) {
   mutate((s) => {
     const plan = ensurePlan(s, weekStart);
-    s.extras = [
-      ...(s.extras ?? []),
-      {
-        id: newId(),
-        week_plan_id: plan.id,
-        name,
-        staple_id: stapleId ?? null,
-        quantity: quantity && quantity > 1 ? quantity : null,
-      },
-    ];
+    s.extras = [...(s.extras ?? []), { id: newId(), week_plan_id: plan.id, name, staple_id: stapleId ?? null }];
   });
 }
 
@@ -741,6 +731,13 @@ export async function setStapleSkipped(_householdId: string, weekStart: string, 
     const plan = ensurePlan(s, weekStart);
     const rest = (plan.staples_skipped ?? []).filter((id) => id !== stapleId);
     plan.staples_skipped = skipped ? [...rest, stapleId] : rest;
+  });
+}
+
+/** How many of something added by hand (null: just one). */
+export async function setShoppingExtraQuantity(extra: ShoppingExtra, quantity: number | null) {
+  mutate((s) => {
+    s.extras = (s.extras ?? []).map((e) => (e.id === extra.id ? { ...e, quantity } : e));
   });
 }
 

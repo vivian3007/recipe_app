@@ -42,4 +42,5 @@ export const {
   listShoppingExtras,
   addShoppingExtra,
   removeShoppingExtra,
+  setShoppingExtraQuantity,
 } = impl;

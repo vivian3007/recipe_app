@@ -86,6 +86,8 @@ export type ShoppingItem = {
   extraId?: string;
   /** The staple (Vaste boodschappen) it came from: "Thee" for "Thee rooibos". */
   staple?: string;
+  /** What the recipes say, when someone changed the amount for this week. */
+  planned?: number | null;
 };
 
 /** Combines the ingredients of all meals in a week, scaled to each meal's number of people. */

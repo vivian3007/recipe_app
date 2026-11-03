@@ -382,19 +382,12 @@ export async function addShoppingExtra(
   userId: string,
   name: string,
   stapleId?: string,
-  quantity?: number,
 ) {
   const plan = await ensureWeekPlan(householdId, weekStart);
   check(
     await supabase
       .from('shopping_extras')
-      .insert({
-        week_plan_id: plan.id,
-        name,
-        created_by: userId,
-        staple_id: stapleId ?? null,
-        quantity: quantity && quantity > 1 ? quantity : null,
-      }),
+      .insert({ week_plan_id: plan.id, name, created_by: userId, staple_id: stapleId ?? null }),
   );
 }
 
@@ -404,6 +397,11 @@ export async function setStapleSkipped(householdId: string, weekStart: string, s
   const rest = (plan.staples_skipped ?? []).filter((id) => id !== stapleId);
   const staples_skipped = skipped ? [...rest, stapleId] : rest;
   check(await supabase.from('week_plans').update({ staples_skipped }).eq('id', plan.id));
+}
+
+/** How many of something added by hand (null: just one). */
+export async function setShoppingExtraQuantity(extra: ShoppingExtra, quantity: number | null) {
+  check(await supabase.from('shopping_extras').update({ quantity }).eq('id', extra.id));
 }
 
 export async function removeShoppingExtra(extra: ShoppingExtra) {

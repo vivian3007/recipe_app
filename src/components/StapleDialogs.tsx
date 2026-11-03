@@ -139,35 +139,9 @@ export function PasteListDialog({
   );
 }
 
-/** − 1 +: how many. */
-export function Stepper({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
-  return (
-    <View style={styles.stepper}>
-      <Pressable
-        onPress={() => onChange(Math.max(1, value - 1))}
-        disabled={value <= 1}
-        hitSlop={4}
-        accessibilityLabel={`Minder ${label}`}
-        style={({ pressed }) => [styles.stepButton, (pressed || value <= 1) && { opacity: 0.4 }]}
-      >
-        <Ionicons name="remove" size={14} color={colors.text} />
-      </Pressable>
-      <Text style={styles.stepValue}>{value}</Text>
-      <Pressable
-        onPress={() => onChange(value + 1)}
-        hitSlop={4}
-        accessibilityLabel={`Meer ${label}`}
-        style={({ pressed }) => [styles.stepButton, pressed && { opacity: 0.4 }]}
-      >
-        <Ionicons name="add" size={14} color={colors.text} />
-      </Pressable>
-    </View>
-  );
-}
-
 /**
- * Nodig for a product whose kind changes every week (Thee, Vleeswaren): type which ones this week,
- * with how many of each. Without a kind it just goes on the list as it is.
+ * Nodig for a product whose kind changes every week (Thee, Vleeswaren): type which ones this week.
+ * Without a kind it just goes on the list as it is.
  */
 export function KindsDialog({
   staple,
@@ -178,7 +152,7 @@ export function KindsDialog({
   staple: Staple | null;
   onClose: () => void;
   /** What goes on the shopping list: the kinds, or the product itself. */
-  onConfirm: (lines: { name: string; quantity: number }[]) => void;
+  onConfirm: (names: string[]) => void;
 }) {
   return (
     <Sheet visible={staple != null} onClose={onClose}>
@@ -194,83 +168,64 @@ function KindsDialogContent({
 }: {
   staple: Staple;
   onClose: () => void;
-  onConfirm: (lines: { name: string; quantity: number }[]) => void;
+  onConfirm: (names: string[]) => void;
 }) {
-  const [lines, setLines] = useState<{ name: string; quantity: number }[]>([]);
+  const [lines, setLines] = useState<string[]>([]);
   const [kind, setKind] = useState('');
-  const [quantity, setQuantity] = useState(1);
   const input = useRef<TextInput>(null);
 
+  // What's still in the field counts too, unless it's already there.
+  const typed = kind.trim();
+  const all = !typed || lines.some((l) => l.toLowerCase() === typed.toLowerCase()) ? lines : [...lines, typed];
+
   function addLine() {
-    const name = kind.trim();
-    if (!name) return;
-    const same = lines.findIndex((l) => l.name.toLowerCase() === name.toLowerCase());
-    setLines(
-      same === -1
-        ? [...lines, { name, quantity }]
-        : lines.map((l, i) => (i === same ? { ...l, quantity: l.quantity + quantity } : l)),
-    );
+    if (!typed) return;
+    setLines(all);
     setKind('');
-    setQuantity(1);
     input.current?.focus();
   }
 
-  function confirm() {
-    // What's still in the field counts too.
-    const name = kind.trim();
-    const all = name ? [...lines, { name, quantity }] : lines;
-    onConfirm(all.length ? all : [{ name: staple.name, quantity }]);
-  }
-
-  const count = lines.reduce((sum, l) => sum + l.quantity, 0) + (kind.trim() ? quantity : 0);
+  const count = all.length;
 
   return (
     <>
       <Text style={styles.title}>{staple.name}: welke deze week?</Text>
       <Text style={styles.hint}>Typ de soort en tik op Erbij. Nog een soort? Typ de volgende.</Text>
       {lines.map((line, i) => (
-        <View key={line.name} style={styles.line}>
+        <View key={line} style={styles.line}>
           <Ionicons name="checkmark" size={16} color={colors.accent} />
           <Text style={styles.lineName} numberOfLines={1}>
-            {line.name}
+            {line}
           </Text>
-          <Stepper
-            value={line.quantity}
-            onChange={(n) => setLines(lines.map((l, j) => (j === i ? { ...l, quantity: n } : l)))}
-            label={line.name}
-          />
           <Pressable
             onPress={() => setLines(lines.filter((_, j) => j !== i))}
             hitSlop={8}
-            accessibilityLabel={`${line.name} weghalen`}
+            accessibilityLabel={`${line} weghalen`}
           >
             <Ionicons name="close" size={16} color={colors.textMuted} />
           </Pressable>
         </View>
       ))}
-      <View style={styles.inlineRow}>
-        <TextInput
-          ref={input}
-          value={kind}
-          onChangeText={setKind}
-          onSubmitEditing={addLine}
-          submitBehavior="submit"
-          // The web ignores submitBehavior and leaves the field after Enter without this.
-          blurOnSubmit={false}
-          autoFocus
-          returnKeyType="done"
-          placeholder={lines.length ? 'Nog een soort' : `Soort, bijv. ${staple.name.toLowerCase() === 'thee' ? 'rooibos' : 'ham'}`}
-          placeholderTextColor={colors.placeholder}
-          style={[styles.input, styles.inlineInput]}
-        />
-        <Stepper value={quantity} onChange={setQuantity} label={kind.trim() || staple.name} />
-      </View>
+      <TextInput
+        ref={input}
+        value={kind}
+        onChangeText={setKind}
+        onSubmitEditing={addLine}
+        submitBehavior="submit"
+        // The web ignores submitBehavior and leaves the field after Enter without this.
+        blurOnSubmit={false}
+        autoFocus
+        returnKeyType="done"
+        placeholder={lines.length ? 'Nog een soort' : `Soort, bijv. ${staple.name.toLowerCase() === 'thee' ? 'rooibos' : 'ham'}`}
+        placeholderTextColor={colors.placeholder}
+        style={styles.input}
+      />
       <View style={styles.actions}>
-        <Button title="Erbij" icon="add" variant="secondary" onPress={addLine} disabled={!kind.trim()} />
+        <Button title="Erbij" icon="add" variant="secondary" onPress={addLine} disabled={!typed} />
         <Button
           title={count ? `Op de lijst (${count})` : `Gewoon ${staple.name.toLowerCase()}`}
           icon="checkmark"
-          onPress={confirm}
+          onPress={() => onConfirm(all.length ? all : [staple.name])}
         />
       </View>
     </>
@@ -452,9 +407,6 @@ const styles = StyleSheet.create({
   },
   removeText: { fontSize: 15, fontWeight: '600', color: colors.danger },
   label: { fontSize: 13, fontWeight: '700', color: colors.text },
-  inlineRow: { flexDirection: 'row', gap: spacing(2), marginTop: -spacing(1) },
-  // On the web a text field won't shrink below its default width otherwise (narrow phones).
-  inlineInput: { flex: 1, minWidth: 0, paddingVertical: spacing(2), fontSize: 15 },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -484,16 +436,4 @@ const styles = StyleSheet.create({
     paddingTop: spacing(3),
   },
   aisleValue: { flex: 1, textAlign: 'right', fontSize: 14, color: colors.textMuted },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  stepButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepValue: { minWidth: 16, textAlign: 'center', fontSize: 14, fontWeight: '700', color: colors.text },
 });

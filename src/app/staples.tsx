@@ -5,7 +5,7 @@ import { LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View } from '
 
 import { AisleEditor } from '@/components/AisleEditor';
 import { AislePicker } from '@/components/AislePicker';
-import { AddStapleDialog, KindsDialog, PasteListDialog, StapleDialog, Stepper } from '@/components/StapleDialogs';
+import { AddStapleDialog, KindsDialog, PasteListDialog, StapleDialog } from '@/components/StapleDialogs';
 import { Button, EmptyState, Loading, type IconName } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { addShoppingExtra, listShoppingExtras, removeShoppingExtra, saveStaples, setStapleSkipped } from '@/lib/api';
@@ -33,19 +33,15 @@ function parseList(text: string, existing: Staple[]): Staple[] {
   return added;
 }
 
-/** What's on the shopping list from one staple: "2×", or "2 rooibos, munt" for kinds. */
+/** What's on the shopping list from one staple: the kinds, if it has any ("rooibos, munt"). */
 function onListText(staple: Staple, added: ShoppingExtra[]) {
-  const parts = added
-    .map((e) =>
-      e.name === staple.name ? (e.quantity ? `${e.quantity}×` : '') : [e.quantity, e.name].filter(Boolean).join(' '),
-    )
-    .filter(Boolean);
-  return parts.length ? `Op het lijstje: ${parts.join(', ')}` : 'Op het boodschappenlijstje';
+  const kinds = added.map((e) => e.name).filter((name) => name !== staple.name);
+  return kinds.length ? `Op het lijstje: ${kinds.join(', ')}` : 'Op het boodschappenlijstje';
 }
 
 /**
  * Vaste boodschappen: products the family buys often. Every week you go through them, per aisle:
- * Nodig (it goes on the shopping list, as many as you set) or Niet nodig. For a product that's
+ * Nodig (it goes on the shopping list) or Niet nodig. For a product that's
  * different every week (Thee, Vleeswaren) Nodig asks which kind. What you've been through moves
  * down to Bekeken, so the list gets shorter. Tapping a name changes it or its aisle.
  */
@@ -67,8 +63,6 @@ export default function Staples() {
   const [moving, setMoving] = useState<Staple | null>(null);
   const [choosingKinds, setChoosingKinds] = useState<Staple | null>(null);
   const [editingAisles, setEditingAisles] = useState(false);
-  // How many of a product, set before Nodig.
-  const [amounts, setAmounts] = useState<Record<string, number>>({});
   // What the last paste did, shown under the buttons.
   const [pasteResult, setPasteResult] = useState<string | null>(null);
 
@@ -106,20 +100,19 @@ export default function Staples() {
   const done = groups.flatMap((g) => g.items).filter(isDone);
   const toCheck = staples.length - done.length;
 
-  /** Nodig: on the shopping list, as many as set. Thee, Vleeswaren etc. ask which kind first. */
+  /** Nodig: on the shopping list. Thee, Vleeswaren etc. ask which kind first. */
   function needed(staple: Staple) {
     if (staple.askKind) setChoosingKinds(staple);
-    else add(staple, [{ name: staple.name, quantity: amounts[staple.id] ?? 1 }]);
+    else add(staple, [staple.name]);
   }
 
-  async function add(staple: Staple, lines: { name: string; quantity: number }[]) {
+  async function add(staple: Staple, names: string[]) {
     if (!household || !profile) return;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setAddingIds((ids) => [...ids, staple.id]);
-    setAmounts(({ [staple.id]: _, ...rest }) => rest);
     try {
-      for (const line of lines) {
-        await addShoppingExtra(household.id, weekStart, profile.id, line.name, staple.id, line.quantity);
+      for (const name of names) {
+        await addShoppingExtra(household.id, weekStart, profile.id, name, staple.id);
       }
       if (skipped(staple.id)) await setStapleSkipped(household.id, weekStart, staple.id, false);
       if (plan) await loadExtras();
@@ -226,8 +219,8 @@ export default function Staples() {
       <KindsDialog
         staple={choosingKinds}
         onClose={() => setChoosingKinds(null)}
-        onConfirm={(lines) => {
-          if (choosingKinds) add(choosingKinds, lines);
+        onConfirm={(names) => {
+          if (choosingKinds) add(choosingKinds, names);
           setChoosingKinds(null);
         }}
       />
@@ -299,21 +292,9 @@ export default function Staples() {
           <View style={styles.list}>
             {items.map((staple) => (
               <View key={staple.id} style={styles.item}>
-                {/* The amount sits under the name, so the name keeps its room on a phone. */}
-                <View style={styles.nameButton}>
-                  <Pressable onPress={() => setSelected(staple)} hitSlop={4}>
-                    <Text style={styles.name}>{staple.name}</Text>
-                  </Pressable>
-                  {!staple.askKind && (
-                    <View style={styles.amount}>
-                      <Stepper
-                        value={amounts[staple.id] ?? 1}
-                        onChange={(n) => setAmounts((a) => ({ ...a, [staple.id]: n }))}
-                        label={staple.name}
-                      />
-                    </View>
-                  )}
-                </View>
+                <Pressable onPress={() => setSelected(staple)} style={styles.nameButton} hitSlop={4}>
+                  <Text style={styles.name}>{staple.name}</Text>
+                </Pressable>
                 <Pressable
                   onPress={() => needed(staple)}
                   accessibilityLabel={`${staple.name} is nodig`}
@@ -449,7 +430,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   nameButton: { flex: 1, minWidth: 0 },
-  amount: { flexDirection: 'row', marginTop: spacing(1) },
   name: { fontSize: 15, color: colors.text },
   sub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   needed: {

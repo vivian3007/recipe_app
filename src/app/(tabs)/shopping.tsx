@@ -20,8 +20,16 @@ import { Button, EmptyState, Loading } from '@/components/ui';
 import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { AisleEditor } from '@/components/AisleEditor';
 import { AislePicker } from '@/components/AislePicker';
+import { AmountDialog } from '@/components/AmountDialog';
 import { aisleOf } from '@/lib/aisles';
-import { addShoppingExtra, listShoppingChecks, listShoppingExtras, removeShoppingExtra, setShoppingCheck } from '@/lib/api';
+import {
+  addShoppingExtra,
+  listShoppingChecks,
+  listShoppingExtras,
+  removeShoppingExtra,
+  setShoppingCheck,
+  setShoppingExtraQuantity,
+} from '@/lib/api';
 import { dateOfDay, dayShort, formatShort, weekLabel } from '@/lib/dates';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
 import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
@@ -33,6 +41,21 @@ import { useWeekPlan } from '@/lib/useWeekPlan';
 
 /** Recipe ingredients someone took off this week's list are kept as a check with this prefix. */
 const HIDDEN = 'weg:';
+/** A changed amount of a recipe ingredient this week, kept as a check: "aantal:1:mozzarella|bol". */
+const AMOUNT = 'aantal:';
+
+/** The changed amounts this week, per item key. */
+function changedAmounts(checks: Set<string>) {
+  const amounts = new Map<string, { quantity: number; check: string }>();
+  for (const check of checks) {
+    if (!check.startsWith(AMOUNT)) continue;
+    const rest = check.slice(AMOUNT.length);
+    const colon = rest.indexOf(':');
+    const quantity = Number(rest.slice(0, colon));
+    if (colon > 0 && Number.isFinite(quantity)) amounts.set(rest.slice(colon + 1), { quantity, check });
+  }
+  return amounts;
+}
 
 export default function Shopping() {
   useWeekFromLink();
@@ -43,6 +66,8 @@ export default function Shopping() {
   const [moving, setMoving] = useState<ShoppingItem | null>(null);
   const [editingAisles, setEditingAisles] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  // The product whose amount is being changed.
+  const [changing, setChanging] = useState<ShoppingItem | null>(null);
   const { plan, meals, loading, error, reload } = useWeekPlan(weekStart);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ShoppingExtra[]>([]);
@@ -68,10 +93,14 @@ export default function Shopping() {
     }, [loadChecks]),
   );
 
+  const amounts = useMemo(() => changedAmounts(checked), [checked]);
   const items = useMemo(
     () =>
       [
-        ...buildShoppingList(meals),
+        ...buildShoppingList(meals).map((item) => {
+          const changed = amounts.get(item.key);
+          return changed ? { ...item, quantity: changed.quantity, planned: item.quantity } : item;
+        }),
         ...extras.map(
           (e): ShoppingItem => ({
             key: `extra:${e.id}`,
@@ -84,7 +113,7 @@ export default function Shopping() {
           }),
         ),
       ].sort((a, b) => a.name.localeCompare(b.name, 'nl')),
-    [meals, extras, household?.staples],
+    [meals, extras, household?.staples, amounts],
   );
   // Recipe ingredients you don't need this week (you still have them, say): out of sight, but they can go back.
   const hidden = items.filter((i) => checked.has(HIDDEN + i.key));
@@ -121,6 +150,24 @@ export default function Shopping() {
     if (item.extraId) return removeExtra(item);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCheck(HIDDEN + item.key, true);
+  }
+
+  /** A new amount for this week; null: back to what the recipes say (or one, when added by hand). */
+  async function setAmount(item: ShoppingItem, quantity: number | null) {
+    const extra = extras.find((e) => e.id === item.extraId);
+    if (extra) {
+      const next = quantity && quantity !== 1 ? quantity : null;
+      setExtras((prev) => prev.map((e) => (e.id === extra.id ? { ...e, quantity: next } : e)));
+      try {
+        await setShoppingExtraQuantity(extra, next);
+      } catch {
+        loadChecks();
+      }
+      return;
+    }
+    const old = amounts.get(item.key);
+    if (old) await setCheck(old.check, false);
+    if (quantity != null) await setCheck(`${AMOUNT}${quantity}:${item.key}`, true);
   }
 
   function putBack(item: ShoppingItem) {
@@ -301,6 +348,7 @@ export default function Shopping() {
                       checked={false}
                       onPress={() => toggle(item)}
                       onMove={() => setMoving(item)}
+                      onAmount={() => setChanging(item)}
                       onRemove={() => remove(item)}
                     />
                   ))}
@@ -349,6 +397,12 @@ export default function Shopping() {
         )}
       </ScrollView>
 
+      <AmountDialog
+        item={changing}
+        onClose={() => setChanging(null)}
+        onSave={(quantity) => changing && setAmount(changing, quantity)}
+      />
+
       <AislePicker
         name={moving?.name ?? null}
         current={moving ? aisleOfItem(moving) : null}
@@ -391,6 +445,7 @@ function Row({
   checked,
   onPress,
   onMove,
+  onAmount,
   onRemove,
 }: {
   item: ShoppingItem;
@@ -398,6 +453,8 @@ function Row({
   onPress: () => void;
   /** Choose another aisle for the product. */
   onMove?: () => void;
+  /** Change how many, for this week. */
+  onAmount?: () => void;
   /** Off this week's list. */
   onRemove?: () => void;
 }) {
@@ -447,10 +504,26 @@ function Row({
           />
         </Animated.View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.itemName, showChecked && styles.checked]}>
-            {amount ? <Text style={styles.amount}>{amount} </Text> : null}
-            {item.name}
-          </Text>
+          <View style={styles.nameRow}>
+            {onAmount && (amount || item.extraId) ? (
+              // Tap the amount to change it (still one mozzarella at home: 2 becomes 1).
+              <Pressable
+                onPress={onAmount}
+                hitSlop={6}
+                accessibilityLabel={`Aantal ${item.name} veranderen`}
+                style={({ pressed }) => [
+                  styles.amountChip,
+                  item.planned != null && styles.amountChanged,
+                  pressed && { opacity: 0.5 },
+                ]}
+              >
+                <Text style={[styles.amount, item.planned != null && { color: colors.accent }]}>{amount || '1'}</Text>
+              </Pressable>
+            ) : amount ? (
+              <Text style={[styles.amount, styles.itemName, showChecked && styles.checked]}>{amount}</Text>
+            ) : null}
+            <Text style={[styles.itemName, styles.nameText, showChecked && styles.checked]}>{item.name}</Text>
+          </View>
           <Text style={styles.itemRecipes} numberOfLines={1}>
             {item.staple && item.staple !== item.name
               ? item.staple
@@ -459,6 +532,7 @@ function Row({
                 : item.extraId
                   ? 'Zelf toegevoegd'
                   : item.recipes.join(', ')}
+            {item.planned != null && ` · was ${formatAmount(item.planned, item.unit)}`}
           </Text>
         </View>
         {onMove && (
@@ -562,7 +636,18 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   itemName: { fontSize: 16, color: colors.text },
-  amount: { fontWeight: '700' },
+  amount: { fontSize: 16, fontWeight: '700', color: colors.text },
+  nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(1.5) },
+  nameText: { flexShrink: 1 },
+  amountChip: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing(1.5),
+    paddingVertical: 1,
+  },
+  amountChanged: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   checked: { textDecorationLine: 'line-through', color: colors.textMuted },
   itemRecipes: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   doneTitle: { fontSize: 15, fontWeight: '700', color: colors.textMuted, marginTop: spacing(2) },
