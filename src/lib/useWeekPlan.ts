@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { onDataChanged, readCachedWeek } from './offlineCache';
 import { fetchWeek } from './offlineQueue';
 import { useSession } from './session';
-import { OfflineError } from './supabase';
+import { OfflineError } from './backend';
 import type { ChooserOverrides, WeekPlan, WeekPlanMeal } from './types';
 
 export function useWeekPlan(weekStart: string) {

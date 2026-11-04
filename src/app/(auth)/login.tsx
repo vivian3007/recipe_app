@@ -1,10 +1,12 @@
 import { Link } from 'expo-router';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 import { Text } from 'react-native';
 
 import { AuthScreen, authStyles } from '@/components/AuthScreen';
 import { Button, Field } from '@/components/ui';
-import { supabase } from '@/lib/supabase';
+import { loginErrorText } from '@/lib/family';
+import { auth } from '@/lib/firebase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,9 +17,10 @@ export default function Login() {
   async function signIn() {
     setBusy(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) {
-      setError(error.message === 'Invalid login credentials' ? 'E-mail of wachtwoord klopt niet.' : error.message);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (e) {
+      setError(loginErrorText(e));
       setBusy(false);
     }
   }

@@ -7,6 +7,6 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  // Supabase Edge Functions run on Deno, not in the app.
-  "exclude": ["supabase/functions"]
+  // These run elsewhere, not in the app: on Deno, on Cloudflare, or once from a computer.
+  "exclude": ["supabase/functions", "workers", "scripts", "firebase", "node_modules"]
 }

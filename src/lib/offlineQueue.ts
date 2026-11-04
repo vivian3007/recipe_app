@@ -7,7 +7,8 @@ import {
   saveStoredQueue,
   setOffline,
 } from './offlineCache';
-import { isDemo, OfflineError, supabase } from './supabase';
+import { isDemo, OfflineError } from './backend';
+import { auth, profileIsReachable } from './firebase';
 import type { ShoppingExtra } from './types';
 
 /** A change to the shopping list; without internet it waits here until it can be sent. */
@@ -25,14 +26,11 @@ const MAX_TRIES = 5;
 let queue = readStoredQueue<Queued>();
 let flushing = false;
 
-/**
- * Without a session Supabase sends its public key instead, and then reads come back empty and
- * deletes "work" without removing anything. So that counts as not being connected.
- */
-async function requireSession() {
-  if (isDemo) return;
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw new OfflineError();
+/** Not logged in (yet): nothing can be read or sent, but that says nothing about the internet. */
+const loggedOut = () => !isDemo && !auth.currentUser;
+
+function requireSession() {
+  if (loggedOut()) throw new OfflineError();
 }
 
 function apply(change: ShoppingChange, { checks, extras }: Lists): Lists {
@@ -83,11 +81,10 @@ export function changeShopping(weekStart: string, change: ShoppingChange) {
 
 /** Sends what's waiting, oldest first. Stops at the first sign of no internet and tries again later. */
 export async function flushChanges() {
-  if (flushing || queue.length === 0) return;
+  if (flushing || queue.length === 0 || loggedOut()) return;
   flushing = true;
   let dropped = false;
   try {
-    await requireSession();
     const tried = new Set<Queued>();
     for (;;) {
       // Changes can be added while this runs.
@@ -120,20 +117,15 @@ export async function flushChanges() {
 
 /** Whether anything comes through again, for when there's nothing waiting to be sent. */
 export async function checkConnection() {
+  if (loggedOut()) return;
   if (queue.length > 0) return flushChanges();
-  try {
-    await requireSession();
-    const { status } = await supabase.from('profiles').select('id').limit(1);
-    setOffline(status === 0);
-  } catch {
-    setOffline(true);
-  }
+  setOffline(!(await profileIsReachable()));
 }
 
 /** A week's plan from the server, also kept on this device. */
 export async function fetchWeek(weekStart: string) {
   try {
-    await requireSession();
+    requireSession();
     const week = await getWeekPlan(weekStart);
     patchCachedWeek(weekStart, { ...week, savedAt: Date.now() });
     setOffline(false);
@@ -147,7 +139,7 @@ export async function fetchWeek(weekStart: string) {
 /** A week's ticks and added products from the server, also kept on this device, with what's still waiting on top. */
 export async function fetchShoppingLists(weekStart: string, planId: string): Promise<Lists> {
   try {
-    await requireSession();
+    requireSession();
     const [checks, extras] = await Promise.all([listShoppingChecks(planId), listShoppingExtras(planId)]);
     const lists = withWaitingChanges(planId, { checks, extras });
     patchCachedWeek(weekStart, { checks: [...lists.checks], extras: lists.extras, savedAt: Date.now() });

@@ -1,8 +1,8 @@
 import * as demo from './api.demo';
-import * as remote from './api.remote';
-import { isDemo } from './supabase';
+import * as remote from './api.firebase';
+import { isDemo } from './backend';
 
-// Screens import from here; the demo implementation must match the Supabase one exactly.
+// Screens import from here; the demo implementation must match the Firebase one exactly.
 const impl: typeof remote = isDemo ? demo : remote;
 
 export const {

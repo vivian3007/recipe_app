@@ -13,7 +13,7 @@ import { WEEKDAY_NAMES, WEEKDAY_SHORT, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
 import { rotationFromThisWeek } from '@/lib/members';
 import { useSession } from '@/lib/session';
-import { isDemo } from '@/lib/supabase';
+import { isDemo } from '@/lib/backend';
 import { colors, radius, spacing } from '@/lib/theme';
 
 export default function ProfileScreen() {
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
           <View style={styles.demo}>
             <Ionicons name="flask-outline" size={20} color={colors.accent} />
             <Text style={styles.demoText}>
-              Je gebruikt de demomodus. Alles staat alleen op deze telefoon, met voorbeeldrecepten. Koppel Supabase om
+              Je gebruikt de demomodus. Alles staat alleen op deze telefoon, met voorbeeldrecepten. Koppel Firebase om
               echt met je gezin te delen (zie de README).
             </Text>
           </View>

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui';
 import { notify } from '@/lib/dialogs';
 import { enablePush, getPushState, type PushState } from '@/lib/push';
 import { useSession } from '@/lib/session';
-import { isDemo } from '@/lib/supabase';
+import { isDemo } from '@/lib/backend';
 import { colors, radius, spacing } from '@/lib/theme';
 
 // "Niet nu" is remembered on this device for a week.

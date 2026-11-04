@@ -1,17 +1,21 @@
 import { Link } from 'expo-router';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 import { Text } from 'react-native';
 
 import { AuthScreen, authStyles } from '@/components/AuthScreen';
 import { Button, Field } from '@/components/ui';
-import { supabase } from '@/lib/supabase';
+import { updateDisplayName } from '@/lib/api';
+import { ensureProfile, loginErrorText } from '@/lib/family';
+import { auth } from '@/lib/firebase';
+import { useSession } from '@/lib/session';
 
 export default function Register() {
+  const { refresh } = useSession();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function signUp() {
@@ -21,17 +25,16 @@ export default function Register() {
     }
     setBusy(true);
     setError(null);
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: { data: { display_name: name.trim() } },
-    });
-    setBusy(false);
-    if (error) {
-      setError(error.message);
-    } else if (!data.session) {
-      setInfo('Check je mail en klik op de bevestigingslink. Daarna kun je inloggen.');
+    try {
+      const { user } = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      // The session may have made the profile already, without the name.
+      await ensureProfile(user.uid, name, user.email);
+      await updateDisplayName(user.uid, name.trim());
+      await refresh();
+    } catch (e) {
+      setError(loginErrorText(e));
     }
+    setBusy(false);
   }
 
   return (
@@ -55,7 +58,6 @@ export default function Register() {
         placeholder="Minstens 6 tekens"
       />
       {error && <Text style={authStyles.error}>{error}</Text>}
-      {info && <Text style={authStyles.info}>{info}</Text>}
       <Button title="Account maken" onPress={signUp} loading={busy} disabled={!name.trim() || !email || !password} />
       <Text style={authStyles.switch}>
         Heb je al een account?{' '}

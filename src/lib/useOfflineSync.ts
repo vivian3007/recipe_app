@@ -5,7 +5,7 @@ import { addWeeks, weekStartOf } from './dates';
 import { isOffline, setOffline } from './offlineCache';
 import { checkConnection, flushChanges, keepWeekOnDevice } from './offlineQueue';
 import { useSession } from './session';
-import { isDemo } from './supabase';
+import { isDemo } from './backend';
 
 const RETRY_MS = 20_000;
 

@@ -1,7 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 import { useSyncExternalStore } from 'react';
 
-import { isDemo } from './supabase';
+import { isDemo } from './backend';
 import type { ChooserOverrides, Household, Profile, ShoppingExtra, WeekPlan, WeekPlanMeal } from './types';
 
 // What the app needs without internet, kept on this device: who's logged in and the latest weeks.

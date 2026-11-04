@@ -3,13 +3,14 @@
 import 'expo-sqlite/localStorage/install';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import { doc } from 'firebase/firestore';
 import { router, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import type { PushState } from './push';
 import { setSelectedWeek } from './selectedWeek';
-import { supabase } from './supabase';
+import { db, write } from './firebase';
 
 export type { PushState } from './push';
 
@@ -60,15 +61,20 @@ export async function enablePush(userId: string): Promise<PushState> {
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  const { error } = await supabase.from('push_tokens').upsert({ token, user_id: userId, kind: 'expo', subscription: null });
-  if (error) throw new Error(error.message);
+  await write(async (tx) => {
+    tx.set(doc(db, 'pushTokens', encodeURIComponent(token)), { token, user_id: userId, kind: 'expo', subscription: null });
+  });
   storeToken(token);
   return 'on';
 }
 
 export async function disablePush(): Promise<void> {
   const token = storedToken();
-  if (token) await supabase.from('push_tokens').delete().eq('token', token);
+  if (token) {
+    await write(async (tx) => {
+      tx.delete(doc(db, 'pushTokens', encodeURIComponent(token)));
+    });
+  }
   storeToken(null);
 }
 

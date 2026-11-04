@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { Loading } from '@/components/ui';
 import { refreshPush, useOpenFromNotification } from '@/lib/push';
 import { SessionProvider, useSession } from '@/lib/session';
-import { isDemo } from '@/lib/supabase';
+import { isDemo } from '@/lib/backend';
 import { useAppUpdates } from '@/lib/useAppUpdates';
 import { useOfflineSync } from '@/lib/useOfflineSync';
 import { colors } from '@/lib/theme';

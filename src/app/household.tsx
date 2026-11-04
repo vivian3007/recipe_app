@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Card, Field } from '@/components/ui';
 import { useSession } from '@/lib/session';
-import { supabase } from '@/lib/supabase';
+import { createHousehold, joinHousehold } from '@/lib/family';
 import { colors, spacing } from '@/lib/theme';
 
 export default function HouseholdSetup() {
@@ -17,12 +17,11 @@ export default function HouseholdSetup() {
   async function run(kind: 'create' | 'join') {
     setBusy(kind);
     setError(null);
-    const { error } =
-      kind === 'create'
-        ? await supabase.rpc('create_household', { household_name: name.trim() })
-        : await supabase.rpc('join_household', { code: code.trim() });
-    if (error) {
-      setError(error.message);
+    try {
+      if (kind === 'create') await createHousehold(name.trim());
+      else await joinHousehold(code);
+    } catch (e) {
+      setError((e as Error).message);
       setBusy(null);
       return;
     }

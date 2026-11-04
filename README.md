@@ -8,13 +8,13 @@ Een app voor Android en iPhone om samen met het gezin het avondeten te plannen.
 - **Boodschappen** – alle ingrediënten van de week bij elkaar opgeteld en omgerekend naar het aantal personen (500 g + 1 kg = 1½ kg). Afvinken in de winkel en het lijstje delen via WhatsApp e.d.
 - **Gezin** – iedereen maakt een eigen account en wordt lid met een gezinscode.
 
-Gebouwd met [Expo](https://expo.dev) (React Native, één codebase voor iOS en Android) en [Supabase](https://supabase.com) (accounts + database).
+Gebouwd met [Expo](https://expo.dev) (React Native, één codebase voor iOS en Android) en [Firebase](https://firebase.google.com) (accounts + database), op gratis plannen.
 
 ---
 
 ## Snel proberen: demomodus
 
-Zolang er geen Supabase-gegevens in `.env.local` staan, start de app vanzelf in **demomodus**. Je hoeft dan niet in te loggen, en er staan voorbeeldrecepten en een voorbeeldgezin klaar. Alles wordt alleen op je eigen telefoon bewaard, dus delen met het gezin werkt nog niet.
+Zolang er geen Firebase-gegevens in `.env.local` staan, start de app vanzelf in **demomodus**. Je hoeft dan niet in te loggen, en er staan voorbeeldrecepten en een voorbeeldgezin klaar. Alles wordt alleen op je eigen telefoon bewaard, dus delen met het gezin werkt nog niet.
 
 ```bash
 npm install
@@ -23,20 +23,18 @@ npx expo start
 
 Scan de QR-code met de **Expo Go**-app (App Store / Play Store). Telefoon en computer moeten op hetzelfde wifi zitten; lukt dat niet, gebruik dan `npx expo start --tunnel`.
 
-Via **Gezin → Demo opnieuw beginnen** zet je de voorbeelddata terug. Wil je de demomodus gebruiken terwijl Supabase al is ingesteld, zet dan `EXPO_PUBLIC_DEMO=1` in `.env.local`.
+Via **Gezin → Demo opnieuw beginnen** zet je de voorbeelddata terug. Wil je de demomodus gebruiken terwijl Firebase al is ingesteld, zet dan `EXPO_PUBLIC_DEMO=1` in `.env.local`.
 
-## 1. Supabase instellen (eenmalig, ±5 minuten)
+## 1. Firebase instellen (eenmalig)
 
-1. Maak een gratis account op [supabase.com](https://supabase.com) en klik **New project**.
-2. Ga naar **SQL Editor → New query**, plak de inhoud van [`supabase/schema.sql`](supabase/schema.sql) en klik **Run**.
-3. *(Aanrader)* Ga naar **Authentication → Sign In / Providers → Email** en zet **Confirm email** uit. Dan kan iedereen meteen inloggen na het aanmaken van een account, zonder bevestigingsmail.
-4. Ga naar **Project Settings → API Keys** en kopieer de **Project URL** en de **publishable key**.
-5. Kopieer `.env.example` naar `.env.local` en vul ze in:
+Alles draait gratis, zonder betaalrekening: Firebase op het Spark-plan, foto's bij Cloudinary en meldingen via een Cloudflare Worker. Geen van drieën vraagt om een creditcard; bij een limiet stopt de dienst in plaats van dat er kosten ontstaan.
 
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=https://jouwproject.supabase.co
-   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-   ```
+1. Maak een Firebase-project, zet **Authentication → E-mail/wachtwoord** aan en maak een **Firestore**-database in een Europese locatie.
+2. Zet de beveiligingsregels online: `cd firebase`, `npm install`, `npx firebase login`, `npx firebase deploy --only firestore:rules --project <project>`.
+3. Voeg in de projectinstellingen een web-app toe en kopieer `.env.example` naar `.env.local` met die waarden.
+4. Zet de Worker online, zie [`workers/notify/wrangler.toml`](workers/notify/wrangler.toml).
+
+Stap je over vanaf Supabase, volg dan [`firebase/OVERSTAP.md`](firebase/OVERSTAP.md).
 
 ## 2. De app starten
 
@@ -49,7 +47,7 @@ Installeer **Expo Go** op je telefoon (App Store / Play Store) en scan de QR-cod
 
 ## 3. Op de telefoons van het hele gezin zetten (gratis)
 
-Beide routes gaan via een gratis Expo-account (`npx eas-cli@latest login`). De Supabase-gegevens staan als variabelen in de EAS-omgeving `preview`, anders start de gebouwde app in demomodus.
+Beide routes gaan via een gratis Expo-account (`npx eas-cli@latest login`). De Firebase-gegevens staan als variabelen in de EAS-omgeving `preview`, anders start de gebouwde app in demomodus.
 
 **Android: installeerbare app (APK)**
 
@@ -86,11 +84,11 @@ Wie de komende week kiest, krijgt een herinnering (standaard 2 dagen voor de boo
 
 Eenmalig instellen:
 
-1. Voer [`supabase/notifications.sql`](supabase/notifications.sql) uit in de SQL Editor (zet ook de controle op die elk uur draait).
-2. Maak een toegangssleutel op [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) en zet hem in `.env.local` als `SUPABASE_ACCESS_TOKEN=sbp_...`.
-3. Web Push (iPhone): `npx web-push generate-vapid-keys`; zet de public key in `.env.local` als `EXPO_PUBLIC_VAPID_PUBLIC_KEY` en beide sleutels in Supabase: `npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... --project-ref <project>`.
-4. De functie online zetten: `npx supabase functions deploy notify --no-verify-jwt --project-ref <project>`.
-5. Android: maak een Firebase-project met een Android-app `nl.vlaanderen.weekmenu`, zet `google-services.json` in de projectmap en upload de serviceaccount-sleutel (Projectinstellingen → Serviceaccounts) op expo.dev bij Credentials → Android → FCM V1. Bouw daarna een nieuwe APK.
+1. De herinneringen lopen via de Worker: `cd workers/notify`, `npm install`, `npx wrangler deploy`. De planning (elk uur) staat in `wrangler.toml`.
+2. Web Push (iPhone): `npx web-push generate-vapid-keys`; zet de public key in `.env.local` als `EXPO_PUBLIC_VAPID_PUBLIC_KEY` en beide sleutels als secrets in de Worker.
+3. Zet de geheimen uit `wrangler.toml` in de Worker met `npx wrangler secret put <NAAM>`.
+4. Zet het adres van de Worker in `.env.local` als `EXPO_PUBLIC_WORKER_URL`.
+5. Android: gebruik hetzelfde Firebase-project met een Android-app `nl.vlaanderen.weekmenu`, zet `google-services.json` in de projectmap en upload de serviceaccount-sleutel (Projectinstellingen → Serviceaccounts) op expo.dev bij Credentials → Android → FCM V1. Bouw daarna een nieuwe APK.
 
 ## Hoe gebruik je het?
 
@@ -118,8 +116,11 @@ src/app/            schermen (Expo Router, elk bestand is een scherm)
   pick-recipe.tsx   gerecht kiezen voor een dag
   add-to-week.tsx   recept op een dag zetten
 src/components/     herbruikbare onderdelen
-src/lib/            Supabase-client, data-functies, omrekenen van hoeveelheden
-supabase/schema.sql database, beveiliging en foto-opslag
+src/lib/            Firebase, data-functies, omrekenen van hoeveelheden
+firebase/           beveiligingsregels, tests en het overstapdraaiboek
+workers/notify/     meldingen en toestemming voor foto's (Cloudflare)
+scripts/migrate/    eenmalige overstap vanaf Supabase
+supabase/           de oude database, voor de overstap
 ```
 
 Elk gezin ziet alleen zijn eigen recepten en weekplannen (geregeld met Row Level Security in de database).

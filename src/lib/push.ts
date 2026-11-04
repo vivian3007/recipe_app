@@ -1,6 +1,8 @@
 // Push notifications in the web app (on an iPhone: the app on the home screen) via Web Push.
 // The Android app uses push.native.ts; both have the same functions.
-import { supabase } from './supabase';
+import { doc } from 'firebase/firestore';
+
+import { db, write } from './firebase';
 
 /**
  * on: this device gets notifications. off: not (yet) turned on. blocked: the browser or phone
@@ -47,20 +49,24 @@ export async function enablePush(userId: string): Promise<PushState> {
   const subscription =
     (await reg.pushManager.getSubscription()) ??
     (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(vapidPublicKey!) }));
-  const { error } = await supabase.from('push_tokens').upsert({
-    token: subscription.endpoint,
-    user_id: userId,
-    kind: 'web',
-    subscription: subscription.toJSON(),
+  await write(async (tx) => {
+    // A browser's address is a link, which can't be a document's name as it is.
+    tx.set(doc(db, 'pushTokens', encodeURIComponent(subscription.endpoint)), {
+      token: subscription.endpoint,
+      user_id: userId,
+      kind: 'web',
+      subscription: subscription.toJSON(),
+    });
   });
-  if (error) throw new Error(error.message);
   return 'on';
 }
 
 export async function disablePush(): Promise<void> {
   const subscription = await (await registration()).pushManager.getSubscription();
   if (!subscription) return;
-  await supabase.from('push_tokens').delete().eq('token', subscription.endpoint);
+  await write(async (tx) => {
+    tx.delete(doc(db, 'pushTokens', encodeURIComponent(subscription.endpoint)));
+  });
   await subscription.unsubscribe();
 }
 

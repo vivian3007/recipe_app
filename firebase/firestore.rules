@@ -1,0 +1,86 @@
+rules_version = '2';
+
+// Everyone only sees data of their own family: the same rules the Supabase database had.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function me() {
+      return request.auth.uid;
+    }
+    function myProfile() {
+      return /databases/$(database)/documents/profiles/$(me());
+    }
+    function inFamily(household) {
+      return signedIn() && exists(myProfile()) && get(myProfile()).data.household_id == household;
+    }
+
+    match /profiles/{uid} {
+      allow get: if signedIn() && (uid == me() || resource == null || inFamily(resource.data.household_id));
+      allow list: if inFamily(resource.data.household_id);
+      allow create: if uid == me() && request.resource.data.household_id == null;
+      // The family only changes with a code of that family, or into a family you just made.
+      allow update: if uid == me() && (
+        request.resource.data.household_id == resource.data.household_id
+        || request.resource.data.household_id == null
+        || (
+          'joined_with' in request.resource.data
+          && get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.joined_with)).data.household_id
+            == request.resource.data.household_id
+        )
+        || getAfter(/databases/$(database)/documents/households/$(request.resource.data.household_id)).data.get('created_by', '') == me()
+      );
+    }
+
+    // Only asked for by code, so nobody can list the families.
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && getAfter(/databases/$(database)/documents/households/$(request.resource.data.household_id)).data.created_by == me();
+    }
+
+    // Only the notify worker sends notifications, but everyone keeps their own address.
+    match /pushTokens/{token} {
+      allow get: if signedIn() && (resource == null || resource.data.user_id == me());
+      allow create: if signedIn() && request.resource.data.user_id == me();
+      allow update: if signedIn() && resource.data.user_id == me() && request.resource.data.user_id == me();
+      allow delete: if signedIn() && resource.data.user_id == me();
+    }
+
+    match /households/{household} {
+      allow get: if inFamily(household) || (signedIn() && resource == null);
+      allow create: if signedIn() && request.resource.data.created_by == me();
+      allow update: if inFamily(household)
+        && request.resource.data.invite_code == resource.data.invite_code;
+
+      match /recipes/{recipe} {
+        allow read: if inFamily(household);
+        allow create: if inFamily(household) && request.resource.data.created_by == me();
+        allow update: if inFamily(household);
+        allow delete: if inFamily(household) && resource.data.created_by == me();
+      }
+
+      // Your own, but when a recipe goes, it takes everyone's favorite with it.
+      match /favorites/{favorite} {
+        allow read: if inFamily(household) && resource.data.user_id == me();
+        allow create, update: if inFamily(household) && request.resource.data.user_id == me();
+        allow delete: if inFamily(household);
+      }
+
+      match /weekPlans/{plan} {
+        allow read, write: if inFamily(household);
+      }
+      match /meals/{meal} {
+        allow read, write: if inFamily(household);
+      }
+      match /choosers/{chooser} {
+        allow read, write: if inFamily(household);
+      }
+      match /shoppingExtras/{extra} {
+        allow read, write: if inFamily(household);
+      }
+      // remindersSent is only for the notify worker, which isn't bound by these rules.
+    }
+  }
+}

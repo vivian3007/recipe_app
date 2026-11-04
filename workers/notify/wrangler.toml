@@ -1,0 +1,26 @@
+name = "weekmenu-notify"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+# Every hour; each reminder goes out once, whatever the hour it's due.
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+FIREBASE_PROJECT_ID = "weekmenu-806d1"
+
+# The trial on the test project, deployed with `npx wrangler deploy --env test`. No schedule: its
+# data is a copy of the real family, who shouldn't get reminders twice.
+[env.test]
+name = "weekmenu-notify-test"
+
+[env.test.triggers]
+crons = []
+
+[env.test.vars]
+FIREBASE_PROJECT_ID = "weekmenu-test"
+
+# Secrets, set with `npx wrangler secret put NAME` (add `--env test` for the trial), never in this file:
+# FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY (from a Firebase service account)
+# VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (the same as before, so existing subscriptions keep working)
+# CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET

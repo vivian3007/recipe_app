@@ -1,0 +1,12 @@
+{
+  "name": "weekmenu-migrate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.0.0",
+    "pg": "^8.13.0"
+  }
+}

@@ -8,7 +8,7 @@ import { WEEKDAY_NAMES } from '@/lib/dates';
 import { notify } from '@/lib/dialogs';
 import { disablePush, enablePush, getPushState, type PushState } from '@/lib/push';
 import { useSession } from '@/lib/session';
-import { isDemo } from '@/lib/supabase';
+import { isDemo } from '@/lib/backend';
 import { colors, spacing } from '@/lib/theme';
 import type { NotificationSettings as Settings } from '@/lib/types';
 
