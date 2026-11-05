@@ -11,6 +11,7 @@ import { saveChooserRotation, setShoppingDay, updateDisplayName } from '@/lib/ap
 import { getDemoSession } from '@/lib/api.demo';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
+import { inviteLink } from '@/lib/invite';
 import { rotationFromThisWeek } from '@/lib/members';
 import { useSession } from '@/lib/session';
 import { pageWidth } from '@/lib/layout';
@@ -80,11 +81,22 @@ export default function ProfileScreen() {
     }
   }
 
-  function shareCode() {
+  async function invite() {
     if (!household) return;
-    Share.share({
-      message: `Doe mee met "${household.name}" in de Weekmenu-app! Maak een account en vul deze gezinscode in: ${household.invite_code}`,
-    });
+    const link = inviteLink(household.invite_code);
+    try {
+      await Share.share({ message: `Doe mee met "${household.name}" in Weekmenu! Tik op de link en maak een account, dan zit je er meteen bij: ${link}` });
+    } catch (e) {
+      // Changed their mind about sharing.
+      if ((e as Error).name === 'AbortError') return;
+      // Not every browser can share, most computers for one: then it goes on the clipboard.
+      try {
+        await navigator.clipboard.writeText(link);
+        notify('Link gekopieerd', 'Plak de link in een bericht naar wie je wilt uitnodigen.');
+      } catch {
+        notify('Uitnodigen', link);
+      }
+    }
   }
 
   async function confirmSignOut() {
@@ -124,11 +136,12 @@ export default function ProfileScreen() {
 
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>{household?.name}</Text>
-          <Text style={styles.muted}>Deel deze code met je gezin, dan kunnen ze meedoen:</Text>
+          <Text style={styles.muted}>Stuur je gezin een uitnodiging. Met de link komen ze er meteen bij, zonder code.</Text>
+          <Button title="Iemand uitnodigen" icon="share-outline" onPress={invite} />
+          <Text style={styles.muted}>Of geef deze gezinscode door:</Text>
           <View style={styles.codeBox}>
             <Text style={styles.code}>{household?.invite_code}</Text>
           </View>
-          <Button title="Code delen" icon="share-outline" variant="secondary" onPress={shareCode} />
         </Card>
 
         <Card style={styles.card}>

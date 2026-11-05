@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
-import { Button, Card, Field } from '@/components/ui';
+import { Button, Card, Field, Loading } from '@/components/ui';
+import { OfflineError } from '@/lib/backend';
+import { clearPendingInvite, readPendingInvite } from '@/lib/invite';
 import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { createHousehold, joinHousehold } from '@/lib/family';
@@ -14,6 +16,32 @@ export default function HouseholdSetup() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState<'create' | 'join' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Came here through an invitation: no need to type anything.
+  const [joining, setJoining] = useState(() => !!readPendingInvite());
+
+  useEffect(() => {
+    const invited = readPendingInvite();
+    if (!invited) return;
+    (async () => {
+      try {
+        await joinHousehold(invited);
+        clearPendingInvite();
+        await refresh();
+        // Normally this screen is gone by now; if loading the family failed, don't keep spinning.
+        setJoining(false);
+      } catch (e) {
+        // Without internet it stays, so it can be used on the next try.
+        if (!(e instanceof OfflineError)) {
+          clearPendingInvite();
+          setError('Deze uitnodiging klopt niet meer. Vraag om een nieuwe link, of vul de gezinscode in.');
+        } else {
+          setCode(invited);
+          setError((e as Error).message);
+        }
+        setJoining(false);
+      }
+    })();
+  }, [refresh]);
 
   async function run(kind: 'create' | 'join') {
     setBusy(kind);
@@ -26,16 +54,20 @@ export default function HouseholdSetup() {
       setBusy(null);
       return;
     }
+    clearPendingInvite();
     await refresh();
   }
+
+  if (joining) return <Loading />;
 
   return (
     <KeyboardScreen>
       <ScrollView contentContainerStyle={[styles.container, pageWidth]} keyboardShouldPersistTaps="handled">
         <Text style={styles.hello}>Hoi {profile?.display_name}! 👋</Text>
         <Text style={styles.intro}>
-          Recepten en weekplannen deel je met je gezin. Heeft iemand anders het gezin al aangemaakt? Vraag dan de
-          gezinscode en vul die hieronder in.
+          Recepten en weekplannen deel je met je gezin. Ben je de eerste? Start dan hieronder een nieuw gezin en nodig
+          de anderen uit. Heeft iemand anders het gezin al aangemaakt? Vraag dan om een uitnodiging, of vul de
+          gezinscode in.
         </Text>
 
         <Card style={styles.card}>

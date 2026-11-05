@@ -8,6 +8,7 @@ import { Button, Field } from '@/components/ui';
 import { updateDisplayName } from '@/lib/api';
 import { ensureProfile, loginErrorText } from '@/lib/family';
 import { auth } from '@/lib/firebase';
+import { readPendingInvite } from '@/lib/invite';
 import { useSession } from '@/lib/session';
 
 export default function Register() {
@@ -38,7 +39,14 @@ export default function Register() {
   }
 
   return (
-    <AuthScreen title="Account maken" subtitle="Iedereen in het gezin maakt een eigen account">
+    <AuthScreen
+      title={readPendingInvite() ? 'Je bent uitgenodigd!' : 'Account maken'}
+      subtitle={
+        readPendingInvite()
+          ? 'Maak een account, dan zit je er meteen bij. Heb je er al een? Log dan in.'
+          : 'Iedereen in het gezin maakt een eigen account'
+      }
+    >
       <Field label="Je naam" value={name} onChangeText={setName} placeholder="Bijv. Vivian" autoComplete="name" />
       <Field
         label="E-mail"

@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { Loading } from '@/components/ui';
+import { notify } from '@/lib/dialogs';
+import { clearPendingInvite, readPendingInvite } from '@/lib/invite';
 import { WIDE } from '@/lib/layout';
 import { refreshPush, useOpenFromNotification } from '@/lib/push';
 import { SessionProvider, useSession } from '@/lib/session';
@@ -21,6 +23,15 @@ function RootNavigator() {
   useEffect(() => {
     if (profile && !isDemo) refreshPush(profile.id).catch(() => {});
   }, [profile]);
+  useEffect(() => {
+    if (!household) return;
+    const invited = readPendingInvite();
+    if (!invited) return;
+    clearPendingInvite();
+    if (invited !== household.invite_code) {
+      notify('Je zit al in een gezin', `Je hoort bij ${household.name}, dus de uitnodiging is niet gebruikt.`);
+    }
+  }, [household]);
   if (loading) return <Loading />;
 
   const hasHousehold = !!household;
@@ -56,6 +67,9 @@ function RootNavigator() {
         <Stack.Screen name="adjust-meal" options={{ title: 'Aanpassen voor deze avond', presentation: 'modal' }} />
         <Stack.Screen name="tags" options={{ title: 'Alle labels', presentation: 'modal' }} />
       </Stack.Protected>
+
+      {/* Last, so that it's never the screen the app falls back to when a guard changes. */}
+      <Stack.Screen name="doe-mee/[code]" options={{ headerShown: false }} />
     </Stack>
   );
 }

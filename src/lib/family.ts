@@ -25,10 +25,14 @@ export async function ensureProfile(id: string, name: string | null, email: stri
     household_id: null,
     created_at: new Date().toISOString(),
   };
-  await write(async (tx) => {
+  // Checked again inside the transaction: right after signing up, the session and the sign-up
+  // screen both get here, and a late second write would undo a family joined in the meantime.
+  return write(async (tx) => {
+    const current = await tx.get(profileRef(id));
+    if (current.exists()) return { ...current.data(), id } as Profile;
     tx.set(profileRef(id), profile);
+    return { id, display_name: profile.display_name, household_id: null } as Profile;
   });
-  return { id, display_name: profile.display_name, household_id: null };
 }
 
 export async function getHousehold(id: string) {
