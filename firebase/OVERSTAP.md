@@ -72,6 +72,7 @@ Download ook de map `recipe-images` uit Supabase Storage. Bewaar dit veilig en *
    npx eas-cli@latest deploy --prod
    npx eas-cli@latest update --channel family --environment preview --platform android --message "Over op Firebase"
    ```
+   Exporteer altijd naar de standaardmap `dist`, zonder `--output-dir` naar een map buiten het project: dan ontbreken de iconen en `manifest.json`, en wordt het app-icoon op de iPhone zwart. Controleer daarna dat `/apple-touch-icon.png` op de site als `image/png` terugkomt; dat kan een minuut duren.
 6. **Iedereen logt één keer opnieuw in** met het eigen wachtwoord.
 
 ## 5. Daarna
