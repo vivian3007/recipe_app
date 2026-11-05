@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
-import { RecipeCard } from '@/components/RecipeCard';
+import { RecipeCard, RecipeCardSpacer } from '@/components/RecipeCard';
 import { Button, Chip, EmptyState, Loading } from '@/components/ui';
+import { gridWidth, recipeColumns, recipeImageHeight } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { clearSelectedTags, tagsByUse, toggleSelectedTag, useSelectedTags } from '@/lib/tags';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -22,6 +23,8 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>('all');
   const selectedTags = useSelectedTags();
   const [refreshing, setRefreshing] = useState(false);
+  const { width } = useWindowDimensions();
+  const columns = recipeColumns(width);
 
   const tags = useMemo(() => tagsByUse(recipes).map((t) => t.tag), [recipes]);
   // Chosen labels first so they can be switched off, then the most used ones.
@@ -57,11 +60,14 @@ export default function Home() {
   return (
     <View style={{ flex: 1 }}>
       <FlatList
-        data={visible.length % 2 ? [...visible, null] : visible}
-        keyExtractor={(r) => r?.id ?? 'spacer'}
-        numColumns={2}
+        // The number of columns can't change on an existing list.
+        key={columns}
+        // Empty places at the end, so the last cards are as wide as the others.
+        data={[...visible, ...Array<null>((columns - (visible.length % columns)) % columns).fill(null)]}
+        keyExtractor={(r, index) => r?.id ?? `spacer-${index}`}
+        numColumns={columns}
         columnWrapperStyle={{ gap: spacing(3) }}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, gridWidth]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -136,9 +142,10 @@ export default function Home() {
               favorite={favorites.has(item.id)}
               onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: item.id } })}
               onToggleFavorite={() => toggleFavorite(item.id)}
+              imageHeight={recipeImageHeight(width, columns)}
             />
           ) : (
-            <View style={{ flex: 1 }} />
+            <RecipeCardSpacer />
           )
         }
       />
@@ -162,7 +169,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing(3),
   },
-  searchInput: { flex: 1, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
+  searchInput: { flex: 1, minWidth: 0, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
   typedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
   fab: {
     position: 'absolute',

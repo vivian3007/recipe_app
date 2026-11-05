@@ -1,8 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router/js-tabs';
-import type { ColorValue } from 'react-native';
+import { Platform, useWindowDimensions, type ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IconName } from '@/components/ui';
+import { WIDE } from '@/lib/layout';
 import { colors } from '@/lib/theme';
 
 function icon(name: IconName, focusedName: IconName) {
@@ -12,12 +14,21 @@ function icon(name: IconName, focusedName: IconName) {
 }
 
 export default function TabLayout() {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          // In the web app the default height cuts the labels in half.
+          ...(Platform.OS === 'web' ? { height: 58 + insets.bottom } : null),
+        },
+        tabBarLabelStyle: { lineHeight: 14 },
+        headerTitleAlign: width > WIDE ? 'center' : 'left',
         headerStyle: { backgroundColor: colors.background },
         headerShadowVisible: false,
         headerTitleStyle: { color: colors.text, fontWeight: '800', fontSize: 20 },

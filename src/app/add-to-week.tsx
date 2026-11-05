@@ -8,6 +8,7 @@ import { addMeal, getRecipe, getWeekPlan, replaceMeal } from '@/lib/api';
 import { addWeeks, dateOfDay, dayName, formatShort, weekLabel, weekRange } from '@/lib/dates';
 import { choose, notify } from '@/lib/dialogs';
 import { setSelectedWeek, useSelectedWeek } from '@/lib/selectedWeek';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { DEFAULT_SERVINGS, type RecipeWithIngredients, type WeekPlanMeal } from '@/lib/types';
@@ -67,7 +68,7 @@ export default function AddToWeek() {
   if (!recipe) return <Loading />;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, pageWidth]}>
       <Text style={styles.recipeTitle}>{recipe.title}</Text>
 
       <View style={styles.servingsRow}>

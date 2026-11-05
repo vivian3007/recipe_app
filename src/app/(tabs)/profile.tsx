@@ -13,6 +13,7 @@ import { WEEKDAY_NAMES, WEEKDAY_SHORT, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
 import { rotationFromThisWeek } from '@/lib/members';
 import { useSession } from '@/lib/session';
+import { pageWidth } from '@/lib/layout';
 import { isDemo } from '@/lib/backend';
 import { colors, radius, spacing } from '@/lib/theme';
 
@@ -107,7 +108,7 @@ export default function ProfileScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, pageWidth]}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!dragging}
       >

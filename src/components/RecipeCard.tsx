@@ -20,16 +20,18 @@ export function RecipeCard({
   favorite,
   onPress,
   onToggleFavorite,
+  imageHeight = 120,
 }: {
   recipe: Recipe;
   favorite: boolean;
   onPress: () => void;
   onToggleFavorite: () => void;
+  imageHeight?: number;
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
       <View>
-        <RecipeImage uri={recipe.image_url} height={120} />
+        <RecipeImage uri={recipe.image_url} height={imageHeight} />
         <Pressable onPress={onToggleFavorite} hitSlop={10} style={styles.heart}>
           <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={20} color={favorite ? colors.primary : colors.text} />
         </Pressable>
@@ -54,7 +56,13 @@ export function RecipeCard({
   );
 }
 
+/** Fills up the last row of the grid, so the cards there are as wide as all the others. */
+export function RecipeCardSpacer() {
+  return <View style={[styles.card, styles.spacer]} />;
+}
+
 const styles = StyleSheet.create({
+  spacer: { backgroundColor: 'transparent', borderColor: 'transparent' },
   card: {
     flex: 1,
     backgroundColor: colors.surface,

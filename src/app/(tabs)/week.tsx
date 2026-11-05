@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ChooserPlanner } from '@/components/ChooserPlanner';
 import { DragHandle } from '@/components/DragHandle';
@@ -14,6 +14,7 @@ import { WeekSwitcher } from '@/components/WeekSwitcher';
 import { removeMeal, resetDayChoosers, setDayChoosers, swapDays, updateMealServings } from '@/lib/api';
 import { dateOfDay, dayName, formatShort, todayIndex, weekStartOf } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
+import { COMPACT, pageWidth, SMALL_PHONE } from '@/lib/layout';
 import { memberColor, memberLabel, rotationChooser } from '@/lib/members';
 import { useSelectedWeek, useWeekFromLink } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
@@ -72,6 +73,7 @@ export default function Week() {
   useWeekFromLink();
   const weekStart = useSelectedWeek();
   const { household, members, profile } = useSession();
+  const { width: screenWidth } = useWindowDimensions();
   const { plan, meals, setMeals, chooserOverrides, setChooserOverrides, savedAt, loading, error, reload } =
     useWeekPlan(weekStart);
   // Whoever's turn it is chooses the whole week, except on days changed for this week.
@@ -298,7 +300,7 @@ export default function Week() {
         onContentSizeChange={(_w, h) => (drag.current.contentHeight = h)}
         onScroll={(e) => (drag.current.scrollY = e.nativeEvent.contentOffset.y)}
         scrollEventThrottle={16}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, pageWidth]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <EnablePushBanner />
@@ -348,15 +350,16 @@ export default function Week() {
                     {name}
                   </Text>
                   <Text style={styles.dayDate} numberOfLines={1}>
-                    {isToday ? 'Vandaag · ' : ''}
-                    {formatShort(dateOfDay(weekStart, day))}
+                    {isToday && screenWidth < COMPACT
+                      ? 'Vandaag'
+                      : `${isToday ? 'Vandaag · ' : ''}${formatShort(dateOfDay(weekStart, day))}`}
                   </Text>
                   <View style={{ flex: 1 }} />
                   {chooserName && (
                     <View style={styles.badge}>
                       <View style={[styles.dot, { backgroundColor: memberColor(chooser, members) }]} />
                       <Text style={styles.badgeText} numberOfLines={1}>
-                        {chooserName} kiest
+                        {screenWidth < COMPACT ? chooserName : `${chooserName} kiest`}
                       </Text>
                     </View>
                   )}
@@ -369,7 +372,7 @@ export default function Week() {
                       accessibilityLabel={`Nog een gerecht op ${name.toLowerCase()}`}
                     >
                       <Ionicons name="add" size={16} color={colors.primaryDark} />
-                      <Text style={styles.addMoreText}>Erbij</Text>
+                      {screenWidth >= SMALL_PHONE && <Text style={styles.addMoreText}>Erbij</Text>}
                     </Pressable>
                   )}
                 </View>
@@ -504,7 +507,7 @@ const styles = StyleSheet.create({
   dayHeader: { height: HEADER_H, flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   dayName: { flexShrink: 0, fontSize: 16, fontWeight: '800', color: colors.text },
   dayDate: { flexShrink: 0, fontSize: 13, color: colors.textMuted },
-  // On a narrow phone who chooses gets shortened, so Erbij always stays inside the card.
+  // If it still doesn't fit, who chooses gets shortened, so Erbij always stays inside the card.
   badge: {
     flexShrink: 1,
     minWidth: 0,

@@ -17,6 +17,7 @@ import {
 import { dateOfDay, dayName, formatShort } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
 import { formatQuantity, parseQuantity } from '@/lib/quantities';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { DEFAULT_SERVINGS, isOwnDish, type Ingredient, type OwnAvgOption } from '@/lib/types';
@@ -238,7 +239,7 @@ export default function ComposeAvg() {
 
   return (
     <KeyboardScreen>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, pageWidth]} keyboardShouldPersistTaps="handled">
         <View style={styles.dayBox}>
           <View>
             <Text style={styles.dayName}>{dayName(weekStart, day)}</Text>

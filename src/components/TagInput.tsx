@@ -101,6 +101,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing(2) },
   input: {
     flex: 1,
+    // On the web a text field won't shrink below its default width otherwise (narrow phones).
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

@@ -12,6 +12,7 @@ import { addShoppingExtra, listShoppingExtras, removeShoppingExtra, saveStaples,
 import { aisleOf } from '@/lib/aisles';
 import { readCachedWeek } from '@/lib/offlineCache';
 import { notify } from '@/lib/dialogs';
+import { pageWidth } from '@/lib/layout';
 import { useSelectedWeek } from '@/lib/selectedWeek';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -257,7 +258,7 @@ export default function Staples() {
 
   if (staples.length === 0) {
     return (
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, pageWidth]}>
         <EmptyState
           icon="star-outline"
           title="Nog geen vaste boodschappen"
@@ -269,7 +270,7 @@ export default function Staples() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, pageWidth]}>
       {/* The same week as on Boodschappen: switch to next week to get its shopping ready. */}
       <WeekSwitcher weekStart={weekStart} />
       <View>

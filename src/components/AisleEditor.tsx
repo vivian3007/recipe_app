@@ -363,6 +363,7 @@ const styles = StyleSheet.create({
   label: { flexShrink: 1, fontSize: 15, color: colors.text },
   input: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderColor: colors.accent,
     borderRadius: radius.sm,

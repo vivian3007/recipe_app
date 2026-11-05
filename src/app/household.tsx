@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Card, Field } from '@/components/ui';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { createHousehold, joinHousehold } from '@/lib/family';
 import { colors, spacing } from '@/lib/theme';
@@ -30,7 +31,7 @@ export default function HouseholdSetup() {
 
   return (
     <KeyboardScreen>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, pageWidth]} keyboardShouldPersistTaps="handled">
         <Text style={styles.hello}>Hoi {profile?.display_name}! 👋</Text>
         <Text style={styles.intro}>
           Recepten en weekplannen deel je met je gezin. Heeft iemand anders het gezin al aangemaakt? Vraag dan de

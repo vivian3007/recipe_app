@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router/stack';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { Loading } from '@/components/ui';
+import { WIDE } from '@/lib/layout';
 import { refreshPush, useOpenFromNotification } from '@/lib/push';
 import { SessionProvider, useSession } from '@/lib/session';
 import { isDemo } from '@/lib/backend';
@@ -12,6 +14,7 @@ import { colors } from '@/lib/theme';
 
 function RootNavigator() {
   const { loading, signedIn, household, profile } = useSession();
+  const { width } = useWindowDimensions();
   useOpenFromNotification();
   useOfflineSync();
   // Keeps this device's notification address with whoever is logged in.
@@ -30,6 +33,7 @@ function RootNavigator() {
         headerShadowVisible: false,
         headerTitleStyle: { color: colors.text, fontWeight: '700' },
         headerBackButtonDisplayMode: 'minimal',
+        headerTitleAlign: width > WIDE ? 'center' : 'left',
         contentStyle: { backgroundColor: colors.background },
       }}
     >

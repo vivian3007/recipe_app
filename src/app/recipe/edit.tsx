@@ -27,6 +27,7 @@ import { getRecipe, listRecipes, pickAndUploadImage, saveRecipe } from '@/lib/ap
 import { confirm, notify } from '@/lib/dialogs';
 import { BlockedError, importRecipe, normalizeUrl, type ImportedRecipe } from '@/lib/recipeImport';
 import { parseRecipeText } from '@/lib/recipeText';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { tagsByUse } from '@/lib/tags';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -234,7 +235,7 @@ export default function EditRecipe() {
 
   return (
     <KeyboardScreen>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, pageWidth]} keyboardShouldPersistTaps="handled">
         {otherAuthor && (
           <View style={styles.warning}>
             <Ionicons name="people-outline" size={20} color={colors.primaryDark} />
@@ -397,6 +398,8 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', gap: spacing(2) },
   linkInput: {
     flex: 1,
+    // On the web a text field won't shrink below its default width otherwise (narrow phones).
+    minWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

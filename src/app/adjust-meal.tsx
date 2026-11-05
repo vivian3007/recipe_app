@@ -14,6 +14,7 @@ import { Button, Field, Loading } from '@/components/ui';
 import { getWeekPlan, updateMealAdjustments } from '@/lib/api';
 import { dayName } from '@/lib/dates';
 import { confirm, notify } from '@/lib/dialogs';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { mealIngredients, type Ingredient, type WeekPlanMeal } from '@/lib/types';
@@ -95,7 +96,7 @@ export default function AdjustMeal() {
 
   return (
     <KeyboardScreen>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.container, pageWidth]} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 2 }}>
           <Text style={styles.title}>{meal.recipe.title}</Text>
           <Text style={styles.subtitle}>

@@ -2,12 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import { useCallback, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { RecipeImage } from '@/components/RecipeCard';
 import { Button, Loading, Stepper } from '@/components/ui';
 import { deleteRecipe, getRecipe, getWeekPlan, listFavoriteIds, setFavorite } from '@/lib/api';
 import { confirm, notify } from '@/lib/dialogs';
+import { pageWidth, WIDE } from '@/lib/layout';
 import { formatAmount, scaleIngredient } from '@/lib/quantities';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
@@ -23,6 +24,7 @@ export default function RecipeDetail() {
     weekStart,
   } = useLocalSearchParams<{ id: string; servings?: string; mealId?: string; weekStart?: string }>();
   const { profile } = useSession();
+  const { width } = useWindowDimensions();
   const [recipe, setRecipe] = useState<RecipeWithIngredients | null>(null);
   const [meal, setMeal] = useState<WeekPlanMeal | null>(null);
   const [favorite, setFav] = useState(false);
@@ -99,8 +101,8 @@ export default function RecipeDetail() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing(12) }}>
-        <RecipeImage uri={recipe.image_url} height={240} rounded={false} />
+      <ScrollView contentContainerStyle={[{ paddingBottom: spacing(12) }, pageWidth]}>
+        <RecipeImage uri={recipe.image_url} height={width > WIDE ? 320 : 240} rounded={width > WIDE} />
         <View style={styles.body}>
           <Text style={styles.title}>{recipe.title}</Text>
           <View style={styles.metaRow}>

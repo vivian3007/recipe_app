@@ -8,6 +8,7 @@ import { Chip, EmptyState, Loading, Stepper } from '@/components/ui';
 import { addMeal, replaceMeal } from '@/lib/api';
 import { dateOfDay, dayName, formatShort } from '@/lib/dates';
 import { notify } from '@/lib/dialogs';
+import { pageWidth } from '@/lib/layout';
 import { useSession } from '@/lib/session';
 import { colors, radius, spacing } from '@/lib/theme';
 import { DEFAULT_SERVINGS } from '@/lib/types';
@@ -55,7 +56,7 @@ export default function PickRecipe() {
     <FlatList
       data={visible}
       keyExtractor={(r) => r.id}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, pageWidth]}
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={
         <View style={{ gap: spacing(3), marginBottom: spacing(2) }}>
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing(3),
   },
-  searchInput: { flex: 1, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
+  searchInput: { flex: 1, minWidth: 0, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
   avg: {
     flexDirection: 'row',
     alignItems: 'center',

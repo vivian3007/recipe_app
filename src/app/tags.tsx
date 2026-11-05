@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { Button, Chip, EmptyState, Loading } from '@/components/ui';
+import { pageWidth } from '@/lib/layout';
 import { replaceTagsEverywhere } from '@/lib/api';
 import { confirm } from '@/lib/dialogs';
 import {
@@ -119,6 +120,7 @@ export default function Tags() {
 
   return (
     <KeyboardScreen>
+      <View style={[{ flex: 1 }, pageWidth]}>
       <View style={styles.header}>
         <View style={styles.search}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -265,6 +267,7 @@ export default function Tags() {
           )}
         </View>
       )}
+      </View>
     </KeyboardScreen>
   );
 }
@@ -282,7 +285,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing(3),
   },
-  searchInput: { flex: 1, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
+  searchInput: { flex: 1, minWidth: 0, paddingVertical: spacing(3), fontSize: 16, color: colors.text },
   selectedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
   selectedText: { flex: 1, fontSize: 14, color: colors.textMuted },
   clear: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },

@@ -66,7 +66,8 @@ export function IngredientEditor({ rows, onChange }: { rows: IngredientRow[]; on
             onChangeText={(name) => updateRow(row.key, { name })}
             placeholder="gehakt"
             placeholderTextColor={colors.placeholder}
-            style={[styles.input, { flex: 1 }]}
+            // On the web a text field won't shrink below its default width otherwise.
+            style={[styles.input, { flex: 1, minWidth: 0 }]}
           />
           <Pressable hitSlop={8} onPress={() => removeRow(row.key)}>
             <Ionicons name="close-circle" size={22} color={colors.border} />

@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -25,6 +26,7 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { aisleOf } from '@/lib/aisles';
 import { addShoppingExtra } from '@/lib/api';
 import { dateOfDay, dayShort, formatShort, weekLabel } from '@/lib/dates';
+import { pageWidth, SMALL_PHONE } from '@/lib/layout';
 import { onDataChanged, readCachedWeek } from '@/lib/offlineCache';
 import { changeShopping, fetchShoppingLists, withWaitingChanges } from '@/lib/offlineQueue';
 import { buildShoppingList, formatAmount, type ShoppingItem } from '@/lib/quantities';
@@ -57,6 +59,7 @@ export default function Shopping() {
   useWeekFromLink();
   const weekStart = useSelectedWeek();
   const { profile, household } = useSession();
+  const { width: screenWidth } = useWindowDimensions();
   const { aisles: shopAisles, setup, overrides, moveTo, saveSetup, moveToNewAisle } = useAisles();
   // The product whose aisle is being chosen.
   const [moving, setMoving] = useState<ShoppingItem | null>(null);
@@ -246,10 +249,11 @@ export default function Shopping() {
         <Pressable
           onPress={addExtra}
           disabled={!newExtra.trim() || adding}
+          accessibilityLabel="Toevoegen"
           style={({ pressed }) => [styles.addButton, (!newExtra.trim() || adding || pressed) && { opacity: 0.5 }]}
         >
           <Ionicons name="add" size={18} color="#fff" />
-          <Text style={styles.addButtonText}>Toevoegen</Text>
+          {screenWidth >= SMALL_PHONE && <Text style={styles.addButtonText}>Toevoegen</Text>}
         </Pressable>
       </View>
       {extraError && <Text style={styles.extraError}>{extraError}</Text>}
@@ -274,7 +278,7 @@ export default function Shopping() {
   return (
     <KeyboardScreen>
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, pageWidth]}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
@@ -466,6 +470,7 @@ function Row({
   onRemove?: () => void;
 }) {
   const amount = formatAmount(item.quantity, item.unit);
+  const small = useWindowDimensions().width < SMALL_PHONE;
   const [showChecked, setShowChecked] = useState(checked);
   const [busy, setBusy] = useState(false);
   const [pop] = useState(() => new Animated.Value(1));
@@ -502,7 +507,7 @@ function Row({
         transform: [{ translateX: slide }],
       }}
     >
-      <Pressable onPress={press} style={styles.row}>
+      <Pressable onPress={press} style={[styles.row, small && styles.rowSmall]}>
         <Animated.View style={{ transform: [{ scale: pop }] }}>
           <Ionicons
             name={showChecked ? 'checkmark-circle' : 'ellipse-outline'}
@@ -642,10 +647,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
+  rowSmall: { gap: spacing(2), paddingHorizontal: spacing(2.5) },
   itemName: { fontSize: 16, color: colors.text },
   amount: { fontSize: 16, fontWeight: '700', color: colors.text },
-  nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing(1.5) },
-  nameText: { flexShrink: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5) },
+  // A long word can be longer than the room there is: on the web it only breaks with this.
+  nameText: { flex: 1, ...(Platform.OS === 'web' ? ({ overflowWrap: 'anywhere' } as object) : null) },
   amountChip: {
     backgroundColor: colors.background,
     borderWidth: 1,

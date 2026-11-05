@@ -31,7 +31,7 @@ export const authStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: 'center', padding: spacing(6), gap: spacing(2) },
+  container: { flexGrow: 1, justifyContent: 'center', padding: spacing(6), gap: spacing(2), width: '100%', maxWidth: 480, alignSelf: 'center' },
   logo: {
     width: 80,
     height: 80,
